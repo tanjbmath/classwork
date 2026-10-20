@@ -343,16 +343,29 @@
         };
 
         // Initialize Firebase with fallback or provided global config
-        const firebaseConfig = {
-  apiKey: "AIzaSyABgpqO6L_Ctm4HXUajQpTSQ7wJVIsraP0",
-  authDomain: "classwork1314.firebaseapp.com",
-  databaseURL: "https://classwork1314-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "classwork1314",
-  storageBucket: "classwork1314.firebasestorage.app",
-  messagingSenderId: "1073751121093",
-  appId: "1:1073751121093:web:3cd277765b0cd61cea24ac",
-  measurementId: "G-P61WJLX7WF"
-};
+        <!-- Include Firebase SDK scripts in your <head> or before your script -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+<script>
+  // Your exact Firebase configuration
+  const firebaseConfig = {
+    apiKey: "AIzaSyABgpqO6L_Ctm4HXUajQpTSQ7wJVIsraP0",
+    authDomain: "classwork1314.firebaseapp.com",
+    databaseURL: "https://classwork1314-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "classwork1314",
+    storageBucket: "classwork1314.firebaseapp.com",
+    messagingSenderId: "1073751121093",
+    appId: "1:1073751121093:web:3cd277765b0cd61cea24ac",
+    measurementId: "G-P61WJLX7WF"
+  };
+
+  // Initialize Firebase for Browser
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+</script>
 
         const app = initializeApp(firebaseConfig);
         state.db = getFirestore(app);
