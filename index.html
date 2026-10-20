@@ -110,9 +110,17 @@
             <h3 id="currentAssignmentTitle" class="text-2xl font-bold">---</h3>
             <p id="currentAssignmentDesc" class="text-indigo-200 text-sm mt-1">---</p>
           </div>
-          <div class="bg-indigo-800/80 backdrop-blur border border-indigo-700 px-6 py-3 rounded-lg text-center">
-            <div class="text-xs text-indigo-300 uppercase tracking-wider">Session Code</div>
+          <div class="bg-indigo-800/80 backdrop-blur border border-indigo-700 px-6 py-3 rounded-lg text-center flex flex-col items-center gap-2">
+            <div class="text-xs text-indigo-300 uppercase tracking-wider font-semibold">Session Code</div>
             <div id="currentSessionCode" class="text-3xl font-extrabold tracking-widest text-emerald-400 select-all">------</div>
+            <div class="flex gap-2 mt-1">
+              <button id="copyCodeBtn" class="bg-indigo-700 hover:bg-indigo-600 text-xs px-3 py-1 rounded text-indigo-100 transition flex items-center gap-1 font-medium">
+                <i class="fa-regular fa-copy"></i> Copy Code
+              </button>
+              <button id="quickTestJoinBtn" class="bg-emerald-600 hover:bg-emerald-500 text-xs px-3 py-1 rounded text-white transition flex items-center gap-1 font-medium">
+                <i class="fa-solid fa-vial"></i> Test Join
+              </button>
+            </div>
           </div>
         </div>
 
@@ -310,10 +318,9 @@
 
       auth.signInAnonymously().then(() => {
         isFirebaseReady = true;
-        console.log("Firebase Auth & Firestore ready.");
+        console.log("Firebase Auth & Firestore initialized.");
       }).catch(err => {
-        console.warn("Auth initial warning:", err);
-        // Fallback: system still operates even if Firestore rules delay login
+        console.warn("Auth initialization warning:", err);
         isFirebaseReady = true;
       });
     } catch (err) {
@@ -321,44 +328,59 @@
       showToast("Firebase init error: " + err.message, "error");
     }
 
-    // Local Fallback Storage for smooth local execution if Cloud fails
-    const localStore = {
-      assignments: {},
-      students: {},
-      slides: {}
-    };
+    // Storage for cross-tab & offline session matching
+    function getStoredAssignments() {
+      try {
+        return JSON.parse(localStorage.getItem('classkick_assignments') || '{}');
+      } catch (e) {
+        return {};
+      }
+    }
 
-    // ==========================================
-    // 2. APPLICATION STATE
-    // ==========================================
-    let currentUserRole = null; // 'teacher' or 'student'
+    function saveStoredAssignment(code, data) {
+      try {
+        const current = getStoredAssignments();
+        current[code.toUpperCase()] = data;
+        localStorage.setItem('classkick_assignments', JSON.stringify(current));
+      } catch (e) {
+        console.warn("LocalStorage save error:", e);
+      }
+    }
+
+    // Local state variables
+    let currentUserRole = null;
     let currentAssignmentId = null;
     let currentAssignmentData = null;
     let currentSessionCode = null;
 
-    // Student specific state
     let studentId = null;
     let studentName = null;
-
-    // Active inspection state (for teacher inspecting a student)
     let inspectingStudentId = null;
 
-    // Slide & Canvas State
     let currentSlideIndex = 0;
-    let activeTool = 'pen'; // 'pen', 'eraser', 'text'
+    let activeTool = 'pen';
     let currentColor = '#1e293b';
     let currentLineWidth = 4;
     let isDrawing = false;
     let lastX = 0;
     let lastY = 0;
 
-    // Realtime Firestore Unsubscribe handles
     let unsubAssignment = null;
     let unsubStudents = null;
     let unsubSlideWork = null;
 
+    // Listen for localStorage changes across browser tabs
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'classkick_assignments' && currentSessionCode) {
+        const stored = getStoredAssignments();
+        if (stored[currentSessionCode]) {
+          currentAssignmentData = stored[currentSessionCode];
+        }
+      }
+    });
+
     // ==========================================
-    // 3. UI ELEMENT REFERENCES
+    // UI ROUTING & EVENT LISTENERS
     // ==========================================
     const roleSelectionScreen = document.getElementById('roleSelectionScreen');
     const teacherDashboard = document.getElementById('teacherDashboard');
@@ -371,9 +393,6 @@
     const ctx = mainCanvas.getContext('2d');
     const canvasWrapper = document.getElementById('canvasWrapper');
 
-    // ==========================================
-    // 4. ROUTING & ROLE MANAGEMENT
-    // ==========================================
     document.getElementById('selectTeacherBtn').addEventListener('click', () => switchRole('teacher'));
     document.getElementById('selectStudentBtn').addEventListener('click', () => switchRole('student'));
     resetRoleBtn.addEventListener('click', resetRole);
@@ -395,7 +414,6 @@
     }
 
     function resetRole() {
-      // Unsubscribe listeners
       if (unsubAssignment) unsubAssignment();
       if (unsubStudents) unsubStudents();
       if (unsubSlideWork) unsubSlideWork();
@@ -415,8 +433,27 @@
       roleBadge.textContent = "Connected";
     }
 
+    // Copy Code Button & Quick Test Button
+    document.getElementById('copyCodeBtn').addEventListener('click', () => {
+      if (!currentSessionCode) return;
+      const tempInput = document.createElement('input');
+      tempInput.value = currentSessionCode;
+      document.body.appendChild(tempInput);
+      tempInput.select();
+      document.execCommand('copy');
+      document.body.removeChild(tempInput);
+      showToast(`Copied code ${currentSessionCode} to clipboard!`, 'success');
+    });
+
+    document.getElementById('quickTestJoinBtn').addEventListener('click', () => {
+      if (!currentSessionCode) return;
+      switchRole('student');
+      document.getElementById('joinCodeInput').value = currentSessionCode;
+      document.getElementById('studentNameInput').value = "Test Student " + Math.floor(Math.random() * 100);
+    });
+
     // ==========================================
-    // 5. TEACHER ASSIGNMENT CREATION
+    // TEACHER ASSIGNMENT CREATION
     // ==========================================
     const createAssignmentModal = document.getElementById('createAssignmentModal');
     const slidesConfigContainer = document.getElementById('slidesConfigContainer');
@@ -427,7 +464,7 @@
     document.getElementById('openCreateModalBtn').addEventListener('click', () => {
       slidesConfigContainer.innerHTML = '';
       slideConfigCount = 0;
-      addSlideConfigRow(); // Default 1 slide
+      addSlideConfigRow();
       createAssignmentModal.classList.remove('hidden');
     });
 
@@ -473,7 +510,6 @@
       });
     }
 
-    // FIX: Enhanced Publish Handler with Async/Await & Fallbacks
     createAssignmentForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       
@@ -500,11 +536,10 @@
         return;
       }
 
-      // UI Loading Feedback
       publishBtn.disabled = true;
       publishBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> <span>Publishing...</span>`;
 
-      // Generate 6-digit random code
+      // 6-digit Uppercase Clean Session Code
       const code = Math.random().toString(36).substring(2, 8).toUpperCase();
       const newAssignment = {
         title,
@@ -514,46 +549,42 @@
         createdAt: new Date().toISOString()
       };
 
-      try {
-        let docId = "assign_" + Date.now();
+      let docId = "assign_" + code;
 
+      // Always save locally to ensure instant zero-latency match
+      saveStoredAssignment(code, { ...newAssignment, id: docId });
+
+      try {
         if (db) {
-          // Promise wrapper with 5 second timeout fallback for network/firestore rule blocks
-          const savePromise = db.collection('assignments').add({
+          const savePromise = db.collection('assignments').doc(docId).set({
             ...newAssignment,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           });
 
           const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error("Database connection timeout. Using local session mode.")), 4000)
+            setTimeout(() => reject(new Error("Timeout")), 3500)
           );
 
           try {
-            const docRef = await Promise.race([savePromise, timeoutPromise]);
-            docId = docRef.id;
+            await Promise.race([savePromise, timeoutPromise]);
+            console.log("Firestore assignment doc created:", docId);
           } catch (fireErr) {
-            console.warn("Firestore save deferred/fallback:", fireErr.message);
-            // Save locally for smooth teacher experience
-            localStore.assignments[docId] = { ...newAssignment, id: docId };
-            showToast("Saved in Live Local Session Mode", "info");
+            console.warn("Firestore sync deferred to local storage:", fireErr.message);
           }
-        } else {
-          localStore.assignments[docId] = { ...newAssignment, id: docId };
         }
 
         currentAssignmentId = docId;
         currentSessionCode = code;
         currentAssignmentData = newAssignment;
 
-        // Reset Form UI
         createAssignmentModal.classList.add('hidden');
         createAssignmentForm.reset();
-        showToast(`Assignment published! Code: ${code}`, "success");
+        showToast(`Published! Session Code: ${code}`, "success");
         
         loadTeacherAssignmentView(docId);
       } catch (err) {
-        console.error("Error publishing assignment:", err);
-        showToast("Publish Error: " + err.message, "error");
+        console.error("Publishing error:", err);
+        showToast("Publish error: " + err.message, "error");
       } finally {
         publishBtn.disabled = false;
         publishBtn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> <span>Publish Assignment</span>`;
@@ -561,19 +592,17 @@
     });
 
     // ==========================================
-    // 6. TEACHER LIVE MONITORING VIEW
+    // TEACHER LIVE MONITORING
     // ==========================================
     function loadTeacherAssignmentView(assignmentId) {
       document.getElementById('teacherActiveSection').classList.remove('hidden');
 
-      // Set header static initial values
       document.getElementById('currentAssignmentTitle').textContent = currentAssignmentData.title;
       document.getElementById('currentAssignmentDesc').textContent = currentAssignmentData.description || 'No instructions provided.';
       document.getElementById('currentSessionCode').textContent = currentAssignmentData.sessionCode;
       document.getElementById('shareCodeText').textContent = currentAssignmentData.sessionCode;
 
       if (db) {
-        // Listen to assignment details live
         if (unsubAssignment) unsubAssignment();
         unsubAssignment = db.collection('assignments').doc(assignmentId).onSnapshot(doc => {
           if (!doc.exists) return;
@@ -581,14 +610,13 @@
           document.getElementById('currentAssignmentTitle').textContent = currentAssignmentData.title;
           document.getElementById('currentAssignmentDesc').textContent = currentAssignmentData.description || 'No instructions provided.';
           document.getElementById('currentSessionCode').textContent = currentAssignmentData.sessionCode;
-        }, err => console.warn("Doc snapshot listener:", err));
+        }, err => console.warn("Snapshot notice:", err));
 
-        // Listen to joined students live
         if (unsubStudents) unsubStudents();
         unsubStudents = db.collection('assignments').doc(assignmentId).collection('students').onSnapshot(snapshot => {
           renderStudentGrid(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
         }, err => {
-          console.warn("Students snapshot listener:", err);
+          console.warn("Student listener notice:", err);
           renderStudentGrid([]);
         });
       } else {
@@ -639,7 +667,6 @@
         grid.appendChild(card);
 
         if (db) {
-          // Fetch latest slide preview image for student
           db.collection('assignments').doc(currentAssignmentId)
             .collection('students').doc(student.id)
             .collection('slides').doc('slide_0').onSnapshot(slideDoc => {
@@ -652,7 +679,6 @@
       });
     }
 
-    // Teacher inspects individual student workspace
     function openWorkspaceForInspection(stId, stName) {
       inspectingStudentId = stId;
       teacherDashboard.classList.add('hidden');
@@ -673,84 +699,93 @@
     });
 
     // ==========================================
-    // 7. STUDENT JOIN & WORKSPACE
+    // STUDENT JOIN & MATCHING FIX
     // ==========================================
     document.getElementById('studentJoinForm').addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const code = document.getElementById('joinCodeInput').value.trim().toUpperCase();
+      const inputCode = document.getElementById('joinCodeInput').value.trim().toUpperCase();
       const name = document.getElementById('studentNameInput').value.trim();
       const joinBtn = document.getElementById('joinBtn');
 
-      if (!code || !name) return;
+      if (!inputCode || !name) {
+        showToast("Please provide both code and student name", "error");
+        return;
+      }
 
       joinBtn.disabled = true;
       joinBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Joining...`;
 
-      try {
-        let assignDoc = null;
+      let matchedData = null;
+      let matchedDocId = null;
 
-        if (db) {
-          const queryPromise = db.collection('assignments').where('sessionCode', '==', code).get();
-          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000));
-          
-          try {
-            const snapshot = await Promise.race([queryPromise, timeoutPromise]);
+      // 1. Check Local Window/Storage first (Instant Zero-Latency Match)
+      const storedAssignments = getStoredAssignments();
+      if (storedAssignments[inputCode]) {
+        matchedData = storedAssignments[inputCode];
+        matchedDocId = matchedData.id || ("assign_" + inputCode);
+        console.log("Matched assignment via Local Sync:", matchedData);
+      }
+
+      // 2. Query Firestore database
+      if (!matchedData && db) {
+        try {
+          // Direct Doc ID lookup first
+          const docDirect = await db.collection('assignments').doc("assign_" + inputCode).get();
+          if (docDirect.exists) {
+            matchedData = docDirect.data();
+            matchedDocId = docDirect.id;
+          } else {
+            // Where Query lookup
+            const snapshot = await db.collection('assignments').where('sessionCode', '==', inputCode).get();
             if (!snapshot.empty) {
-              assignDoc = snapshot.docs[0];
-              currentAssignmentId = assignDoc.id;
-              currentAssignmentData = assignDoc.data();
+              matchedData = snapshot.docs[0].data();
+              matchedDocId = snapshot.docs[0].id;
             }
-          } catch (e) {
-            console.warn("Online lookup failed, checking local sessions");
           }
+        } catch (err) {
+          console.warn("Firestore query note:", err.message);
         }
+      }
 
-        // Check local store fallback if Firestore returns empty or timed out
-        if (!currentAssignmentData && currentSessionCode === code) {
-          currentAssignmentData = { sessionCode: code, title: "Interactive Canvas Assignment", slides: [{ prompt: "Complete the exercise below" }] };
-          currentAssignmentId = "local_assignment";
-        }
-
-        if (!currentAssignmentData) {
-          showToast("Session Code not found. Verify the code with your teacher.", "error");
-          joinBtn.disabled = false;
-          joinBtn.innerHTML = `<span>Start Working</span> <i class="fa-solid fa-arrow-right"></i>`;
-          return;
-        }
-
-        studentName = name;
-        studentId = "st_" + Date.now();
-
-        if (db && currentAssignmentId !== "local_assignment") {
-          db.collection('assignments').doc(currentAssignmentId)
-            .collection('students').doc(studentId).set({
-              name: name,
-              joinedAt: firebase.firestore.FieldValue.serverTimestamp()
-            }).catch(() => {});
-        }
-
-        studentJoinScreen.classList.add('hidden');
-        workspaceScreen.classList.remove('hidden');
-        document.getElementById('exitWorkspaceBtn').classList.add('hidden');
-        document.getElementById('workspaceTitle').textContent = currentAssignmentData.title || "Interactive Assignment";
-        document.getElementById('workspaceSubtext').textContent = `Student: ${name}`;
-
-        currentSlideIndex = 0;
-        setupSlideWorkspace();
-        showToast("Joined assignment successfully!", "success");
-
-      } catch (err) {
-        console.error("Join error:", err);
-        showToast("Failed to join assignment: " + err.message, "error");
-      } finally {
+      if (!matchedData) {
+        showToast(`Session code "${inputCode}" not found. Verify with teacher.`, "error");
         joinBtn.disabled = false;
         joinBtn.innerHTML = `<span>Start Working</span> <i class="fa-solid fa-arrow-right"></i>`;
+        return;
       }
+
+      currentAssignmentData = matchedData;
+      currentAssignmentId = matchedDocId;
+      currentSessionCode = inputCode;
+
+      studentName = name;
+      studentId = "st_" + Date.now();
+
+      if (db && matchedDocId) {
+        db.collection('assignments').doc(matchedDocId)
+          .collection('students').doc(studentId).set({
+            name: name,
+            joinedAt: firebase.firestore.FieldValue.serverTimestamp()
+          }).catch(e => console.warn("Student record write deferred:", e));
+      }
+
+      studentJoinScreen.classList.add('hidden');
+      workspaceScreen.classList.remove('hidden');
+      document.getElementById('exitWorkspaceBtn').classList.add('hidden');
+      document.getElementById('workspaceTitle').textContent = currentAssignmentData.title || "Interactive Assignment";
+      document.getElementById('workspaceSubtext').textContent = `Student: ${name}`;
+
+      currentSlideIndex = 0;
+      setupSlideWorkspace();
+      showToast("Joined assignment successfully!", "success");
+
+      joinBtn.disabled = false;
+      joinBtn.innerHTML = `<span>Start Working</span> <i class="fa-solid fa-arrow-right"></i>`;
     });
 
     // ==========================================
-    // 8. MULTI-SLIDE & CANVAS WORKSPACE CORE
+    // MULTI-SLIDE & CANVAS WORKSPACE CORE
     // ==========================================
     function setupSlideWorkspace() {
       updateSlideNavigationUI();
@@ -764,7 +799,6 @@
       document.getElementById('prevSlideBtn').disabled = (currentSlideIndex === 0);
       document.getElementById('nextSlideBtn').disabled = (currentSlideIndex === totalSlides - 1);
 
-      // Slide Prompt Display
       const promptContainer = document.getElementById('slidePromptContainer');
       const promptText = document.getElementById('slidePromptText');
       const currentSlidePrompt = currentAssignmentData?.slides?.[currentSlideIndex]?.prompt;
@@ -792,7 +826,6 @@
       }
     });
 
-    // Canvas Resizing maintaining resolution aspect ratio
     function resizeCanvas() {
       const rect = canvasWrapper.getBoundingClientRect();
       mainCanvas.width = rect.width;
@@ -802,7 +835,6 @@
 
     window.addEventListener('resize', resizeCanvas);
 
-    // Dynamic background loading
     let currentBgImage = null;
 
     function redrawBackgroundAndCanvas() {
@@ -823,14 +855,13 @@
       }
     }
 
-    // Load slide artwork state from Firestore
     function loadCurrentSlideData() {
       const targetStudentId = inspectingStudentId || studentId;
       if (!currentAssignmentId || !targetStudentId) return;
 
       if (unsubSlideWork) unsubSlideWork();
 
-      if (db && currentAssignmentId !== "local_assignment") {
+      if (db) {
         unsubSlideWork = db.collection('assignments').doc(currentAssignmentId)
           .collection('students').doc(targetStudentId)
           .collection('slides').doc(`slide_${currentSlideIndex}`)
@@ -843,13 +874,12 @@
                 ctx.drawImage(img, 0, 0, mainCanvas.width, mainCanvas.height);
               };
             }
-          }, err => console.warn("Slide load listener:", err));
+          }, err => console.warn("Slide listener notice:", err));
       } else {
         redrawBackgroundAndCanvas();
       }
     }
 
-    // Save canvas state to Firestore (debounced auto-save)
     let saveTimeout = null;
 
     function saveCanvasToFirestore() {
@@ -859,22 +889,21 @@
       clearTimeout(saveTimeout);
       saveTimeout = setTimeout(() => {
         const dataUrl = mainCanvas.toDataURL();
-        if (db && currentAssignmentId !== "local_assignment") {
+        if (db) {
           db.collection('assignments').doc(currentAssignmentId)
             .collection('students').doc(targetStudentId)
             .collection('slides').doc(`slide_${currentSlideIndex}`)
             .set({
               canvasData: dataUrl,
               updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            }, { merge: true }).catch(err => console.warn("Save canvas warning:", err));
+            }, { merge: true }).catch(err => console.warn("Canvas save notice:", err));
         }
       }, 300);
     }
 
     // ==========================================
-    // 9. DRAWING TOOLKIT & HANDLERS
+    // DRAWING TOOLKIT HANDLERS
     // ==========================================
-    // Tool buttons toggle
     const toolPen = document.getElementById('toolPen');
     const toolEraser = document.getElementById('toolEraser');
     const toolText = document.getElementById('toolText');
@@ -907,13 +936,11 @@
       }
     }
 
-    // Clear canvas button
     document.getElementById('clearCanvasBtn').addEventListener('click', () => {
       redrawBackgroundAndCanvas();
       saveCanvasToFirestore();
     });
 
-    // Drawing Mouse / Touch Events
     function getCanvasCoordinates(e) {
       const rect = mainCanvas.getBoundingClientRect();
       const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -986,7 +1013,7 @@
     mainCanvas.addEventListener('touchend', stopDrawing);
 
     // ==========================================
-    // 10. HELPER UTILITIES
+    // UTILITY FUNCTIONS
     // ==========================================
     function showToast(message, type = 'info') {
       const container = document.getElementById('toastContainer');
