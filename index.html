@@ -1,1093 +1,905 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Classroom Interactive Canvas</title>
-    <!-- Tailwind CSS for modern responsive styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Font Awesome for crisp icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google Fonts Inter -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-        }
-        .canvas-container {
-            position: relative;
-            touch-action: none;
-        }
-        canvas {
-            touch-action: none;
-            cursor: crosshair;
-        }
-        /* Custom scrollbars */
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #f1f5f9;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Classkick Interactive Canvas</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Inter Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Firebase v9 Compat SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    .canvas-container {
+      position: relative;
+      touch-action: none;
+    }
+    .touch-none {
+      touch-action: none;
+    }
+  </style>
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col">
 
-    <!-- Top Navigation Bar -->
-    <header class="bg-indigo-600 text-white shadow-md py-3 px-6 flex justify-between items-center z-10">
-        <div class="flex items-center space-x-3">
-            <i class="fa-solid fa-chalkboard-user text-2xl text-indigo-200"></i>
-            <h1 class="text-xl font-bold tracking-wide">Classroom Canvas Live</h1>
-            <span id="roleBadge" class="hidden text-xs bg-indigo-800 text-indigo-100 px-2.5 py-1 rounded-full font-semibold uppercase tracking-wider"></span>
+  <!-- Header Banner -->
+  <header class="bg-indigo-600 text-white shadow-md sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+      <div class="flex items-center space-x-3">
+        <i class="fa-solid me-1 fa-chalkboard-user text-2xl text-indigo-200"></i>
+        <h1 class="text-xl font-bold tracking-tight">Classkick Live Canvas</h1>
+      </div>
+      <div id="userInfo" class="flex items-center space-x-3 text-sm">
+        <span id="roleBadge" class="bg-indigo-800 text-indigo-100 px-3 py-1 rounded-full font-medium shadow-inner">
+          Connecting...
+        </span>
+        <button id="resetRoleBtn" class="hidden bg-white/20 hover:bg-white/30 text-white px-3 py-1 rounded-lg transition text-xs">
+          Switch Role / Exit
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Notification Toast Container -->
+  <div id="toastContainer" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2"></div>
+
+  <!-- Main Content Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6">
+
+    <!-- 1. ROLE SELECTION SCREEN -->
+    <div id="roleSelectionScreen" class="max-w-2xl mx-auto my-12 bg-white rounded-2xl shadow-xl p-8 border border-slate-200">
+      <div class="text-center mb-8">
+        <h2 class="text-3xl font-extrabold text-slate-800">Welcome to Live Canvas</h2>
+        <p class="text-slate-500 mt-2">Select your role to start creating or completing interactive assignments</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Teacher Select -->
+        <button id="selectTeacherBtn" class="p-6 bg-indigo-50 hover:bg-indigo-100 border-2 border-indigo-200 hover:border-indigo-500 rounded-xl transition-all text-left flex flex-col items-center justify-center text-center group shadow-sm hover:shadow-md">
+          <div class="w-16 h-16 bg-indigo-600 text-white rounded-full flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform">
+            <i class="fa-solid fa-user-gear"></i>
+          </div>
+          <h3 class="text-xl font-bold text-indigo-900">Teacher Portal</h3>
+          <p class="text-xs text-indigo-600 mt-2">Create multi-slide assignments, view live student drawing, and give real-time feedback.</p>
+        </button>
+
+        <!-- Student Select -->
+        <button id="selectStudentBtn" class="p-6 bg-emerald-50 hover:bg-emerald-100 border-2 border-emerald-200 hover:border-emerald-500 rounded-xl transition-all text-left flex flex-col items-center justify-center text-center group shadow-sm hover:shadow-md">
+          <div class="w-16 h-16 bg-emerald-600 text-white rounded-full flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform">
+            <i class="fa-solid fa-graduation-cap"></i>
+          </div>
+          <h3 class="text-xl font-bold text-emerald-900">Student Portal</h3>
+          <p class="text-xs text-emerald-600 mt-2">Join a session using a code, complete assignment slides, and receive instant help.</p>
+        </button>
+      </div>
+    </div>
+
+    <!-- 2. TEACHER DASHBOARD -->
+    <div id="teacherDashboard" class="hidden space-y-6">
+      
+      <!-- Top Action Bar -->
+      <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-wrap justify-between items-center gap-4">
+        <div>
+          <h2 class="text-2xl font-bold text-slate-800">Teacher Dashboard</h2>
+          <p class="text-sm text-slate-500">Manage assignments and monitor live student work</p>
         </div>
-        <div id="sessionInfo" class="hidden flex items-center space-x-4">
-            <div class="bg-indigo-700 px-3 py-1.5 rounded-lg text-sm flex items-center space-x-2">
-                <span class="text-indigo-200">Class Code:</span>
-                <strong id="displayClassCode" class="font-mono text-yellow-300 tracking-wider">------</strong>
-                <button id="copyCodeBtn" title="Copy Code" class="hover:text-yellow-300 transition-colors">
-                    <i class="fa-regular fa-copy ml-1"></i>
-                </button>
+        <button id="openCreateModalBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-medium shadow-sm transition flex items-center gap-2">
+          <i class="fa-solid fa-plus"></i> Create New Assignment
+        </button>
+      </div>
+
+      <!-- Active Assignment View -->
+      <div id="teacherActiveSection" class="hidden space-y-6">
+        
+        <!-- Assignment Info Banner -->
+        <div class="bg-indigo-900 text-white p-6 rounded-xl shadow-md flex flex-wrap justify-between items-center gap-4">
+          <div>
+            <span class="text-indigo-300 text-xs font-semibold tracking-wider uppercase">Active Assignment</span>
+            <h3 id="currentAssignmentTitle" class="text-2xl font-bold">---</h3>
+            <p id="currentAssignmentDesc" class="text-indigo-200 text-sm mt-1">---</p>
+          </div>
+          <div class="bg-indigo-800/80 backdrop-blur border border-indigo-700 px-6 py-3 rounded-lg text-center">
+            <div class="text-xs text-indigo-300 uppercase tracking-wider">Session Code</div>
+            <div id="currentSessionCode" class="text-3xl font-extrabold tracking-widest text-emerald-400 select-all">------</div>
+          </div>
+        </div>
+
+        <!-- Live Student Roster & Work Grids -->
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+          <div class="flex justify-between items-center mb-6">
+            <h4 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <i class="fa-solid fa-users text-indigo-600"></i> Live Student Monitoring
+            </h4>
+            <span id="studentCountBadge" class="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-semibold">0 Students Joined</span>
+          </div>
+
+          <!-- Students Live Grid -->
+          <div id="studentsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Dynamically populated student cards -->
+            <div id="emptyStudentState" class="col-span-full text-center py-12 text-slate-400">
+              <i class="fa-solid fa-user-clock text-4xl mb-3"></i>
+              <p>Waiting for students to join with code <span class="font-bold text-indigo-600" id="shareCodeText">------</span>...</p>
             </div>
-            <div class="text-sm font-medium">
-                <span id="displayUserName" class="text-indigo-100"></span>
-            </div>
-            <button id="leaveRoleBtn" class="bg-indigo-800 hover:bg-indigo-900 text-xs px-3 py-1.5 rounded-md transition-all flex items-center gap-1">
-                <i class="fa-solid fa-arrow-right-from-bracket"></i> Exit
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 3. STUDENT JOIN / WORKSPACE -->
+    <!-- Join Form -->
+    <div id="studentJoinScreen" class="hidden max-w-md mx-auto my-12 bg-white rounded-2xl shadow-xl p-8 border border-slate-200">
+      <h2 class="text-2xl font-bold text-center text-slate-800 mb-6">Join Assignment</h2>
+      <form id="studentJoinForm" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Session Code</label>
+          <input type="text" id="joinCodeInput" uppercase required placeholder="e.g. A1B2C3" class="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none uppercase tracking-widest text-center font-bold text-lg">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Your Full Name</label>
+          <input type="text" id="studentNameInput" required placeholder="Enter your name" class="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+        </div>
+        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-lg font-bold transition shadow">
+          Start Working <i class="fa-solid fa-arrow-right ml-2"></i>
+        </button>
+      </form>
+    </div>
+
+    <!-- Canvas Interactive Workspace (Shared between Student & Teacher Inspection) -->
+    <div id="workspaceScreen" class="hidden space-y-4">
+      
+      <!-- Top Slide Nav & Canvas Controls -->
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap justify-between items-center gap-4">
+        
+        <!-- Left: Back button (if teacher monitoring) or Student status -->
+        <div class="flex items-center gap-3">
+          <button id="exitWorkspaceBtn" class="hidden bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1.5 rounded-lg text-sm font-medium transition">
+            <i class="fa-solid fa-arrow-left"></i> Back to Dashboard
+          </button>
+          <div>
+            <h3 id="workspaceTitle" class="font-bold text-slate-800 text-lg">Slide Workspace</h3>
+            <p id="workspaceSubtext" class="text-xs text-slate-500">Slide canvas auto-saves in real time</p>
+          </div>
+        </div>
+
+        <!-- Center: Slide Navigation -->
+        <div class="flex items-center gap-2 bg-slate-100 p-1.5 rounded-lg border border-slate-200">
+          <button id="prevSlideBtn" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded shadow-sm disabled:opacity-40 disabled:cursor-not-allowed font-medium text-sm">
+            <i class="fa-solid fa-chevron-left"></i> Prev
+          </button>
+          <span id="slideIndicator" class="px-3 py-1 text-xs font-bold text-slate-700">Slide 1 of 1</span>
+          <button id="nextSlideBtn" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded shadow-sm disabled:opacity-40 disabled:cursor-not-allowed font-medium text-sm">
+            Next <i class="fa-solid fa-chevron-right"></i>
+          </button>
+        </div>
+
+        <!-- Tools Toolbar -->
+        <div class="flex items-center flex-wrap gap-2">
+          <!-- Drawing Modes -->
+          <div class="flex bg-slate-100 p-1 rounded-lg gap-1 border border-slate-200">
+            <button id="toolPen" title="Pen Tool" class="tool-btn bg-indigo-600 text-white px-3 py-1.5 rounded text-sm transition">
+              <i class="fa-solid fa-pen"></i>
             </button>
+            <button id="toolEraser" title="Eraser Tool" class="tool-btn bg-white hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded text-sm transition">
+              <i class="fa-solid fa-eraser"></i>
+            </button>
+            <button id="toolText" title="Text Tool" class="tool-btn bg-white hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded text-sm transition">
+              <i class="fa-solid fa-font"></i>
+            </button>
+          </div>
+
+          <!-- Color Picker -->
+          <div class="flex items-center gap-1 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">
+            <label for="colorPicker" class="text-xs text-slate-500 font-medium">Color</label>
+            <input type="color" id="colorPicker" value="#1e293b" class="w-7 h-7 rounded border-0 cursor-pointer bg-transparent">
+          </div>
+
+          <!-- Line Thickness Slider -->
+          <div class="flex items-center gap-2 bg-slate-100 px-3 py-1 rounded-lg border border-slate-200">
+            <label for="brushSize" class="text-xs text-slate-500 font-medium">Size</label>
+            <input type="range" id="brushSize" min="2" max="30" value="4" class="w-16 accent-indigo-600 cursor-pointer">
+          </div>
+
+          <!-- Clear Canvas -->
+          <button id="clearCanvasBtn" class="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-3 py-1.5 rounded-lg text-sm font-medium transition">
+            <i class="fa-solid fa-trash-can"></i> Clear
+          </button>
         </div>
-    </header>
 
-    <!-- Main Container -->
-    <main class="flex-1 flex flex-col p-4 md:p-6 max-w-7xl w-full mx-auto">
+      </div>
 
-        <!-- STEP 1: Landing / Role Selection View -->
-        <section id="roleSelectSection" class="flex-1 flex items-center justify-center py-8">
-            <div class="bg-white rounded-2xl shadow-xl p-8 max-w-2xl w-full border border-slate-200 text-center">
-                <h2 class="text-3xl font-extrabold text-slate-800 mb-2">Welcome to Interactive Learning</h2>
-                <p class="text-slate-500 mb-8">Select your role to join or create a real-time collaborative session.</p>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <!-- Teacher Card -->
-                    <div class="border-2 border-indigo-100 hover:border-indigo-500 bg-indigo-50/30 rounded-xl p-6 flex flex-col items-center text-center transition-all duration-300 hover:shadow-lg group">
-                        <div class="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform">
-                            <i class="fa-solid fa-graduation-cap"></i>
-                        </div>
-                        <h3 class="text-xl font-bold text-slate-800 mb-2">Teacher Mode</h3>
-                        <p class="text-xs text-slate-500 mb-6 flex-1">Create assignments, upload task slides, monitor all student work live, and provide instant help.</p>
-                        <button id="selectTeacherBtn" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-md hover:shadow-indigo-200 transition-all">
-                            Enter as Teacher
-                        </button>
-                    </div>
-
-                    <!-- Student Card -->
-                    <div class="border-2 border-emerald-100 hover:border-emerald-500 bg-emerald-50/30 rounded-xl p-6 flex flex-col items-center text-center transition-all duration-300 hover:shadow-lg group">
-                        <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform">
-                            <i class="fa-solid fa-user-pen"></i>
-                        </div>
-                        <h3 class="text-xl font-bold text-slate-800 mb-2">Student Mode</h3>
-                        <p class="text-xs text-slate-500 mb-6 flex-1">Join your teacher's session, solve problems on interactive slides, and ask for help when stuck.</p>
-                        <button id="selectStudentBtn" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg shadow-md hover:shadow-emerald-200 transition-all">
-                            Enter as Student
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- STEP 2A: Teacher Setup Form -->
-        <section id="teacherSetupSection" class="hidden flex-1 flex items-center justify-center py-8">
-            <div class="bg-white rounded-2xl shadow-xl p-8 max-w-lg w-full border border-slate-200">
-                <button class="backToRoleBtn text-slate-400 hover:text-slate-600 text-sm mb-4 flex items-center gap-1">
-                    <i class="fa-solid fa-arrow-left"></i> Back
-                </button>
-                <h2 class="text-2xl font-bold text-slate-800 mb-4">Create New Session</h2>
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Your Name / Title</label>
-                        <input type="text" id="teacherNameInput" placeholder="e.g. Mr. Davis" class="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Classroom Code (Auto-generated or custom)</label>
-                        <input type="text" id="teacherCodeInput" placeholder="e.g. MATH101" class="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none font-mono uppercase">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Initial Slide Count</label>
-                        <select id="initialSlidesCount" class="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                            <option value="1">1 Slide</option>
-                            <option value="2" selected>2 Slides</option>
-                            <option value="3">3 Slides</option>
-                            <option value="5">5 Slides</option>
-                        </select>
-                    </div>
-                    <button id="startTeacherSessionBtn" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-md transition-all mt-2">
-                        Launch Classroom
-                    </button>
-                </div>
-            </div>
-        </section>
-
-        <!-- STEP 2B: Student Setup Form -->
-        <section id="studentSetupSection" class="hidden flex-1 flex items-center justify-center py-8">
-            <div class="bg-white rounded-2xl shadow-xl p-8 max-w-lg w-full border border-slate-200">
-                <button class="backToRoleBtn text-slate-400 hover:text-slate-600 text-sm mb-4 flex items-center gap-1">
-                    <i class="fa-solid fa-arrow-left"></i> Back
-                </button>
-                <h2 class="text-2xl font-bold text-slate-800 mb-4">Join Session</h2>
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Your Full Name</label>
-                        <input type="text" id="studentNameInput" placeholder="e.g. Alex Johnson" class="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Enter Class Code</label>
-                        <input type="text" id="studentCodeInput" placeholder="e.g. MATH101" class="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono uppercase">
-                    </div>
-                    <button id="startStudentSessionBtn" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg shadow-md transition-all mt-2">
-                        Enter Workspace
-                    </button>
-                </div>
-            </div>
-        </section>
-
-        <!-- TEACHER DASHBOARD VIEW -->
-        <section id="teacherDashboard" class="hidden flex-1 flex flex-col space-y-4">
-            <!-- Top Controls Toolbar -->
-            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap items-center justify-between gap-4">
-                <!-- Slide Selection -->
-                <div class="flex items-center space-x-2">
-                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Slide:</span>
-                    <div id="teacherSlideTabs" class="flex items-center space-x-1">
-                        <!-- Dynamic Slide Buttons -->
-                    </div>
-                    <button id="addSlideBtn" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md text-xs font-semibold transition-colors flex items-center gap-1">
-                        <i class="fa-solid fa-plus"></i> Slide
-                    </button>
-                </div>
-
-                <!-- Background Image Upload for Slide -->
-                <div class="flex items-center space-x-3">
-                    <label class="cursor-pointer bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold px-3 py-1.5 rounded-md border border-indigo-200 transition-colors flex items-center gap-1.5">
-                        <i class="fa-solid fa-file-image"></i> Set Slide Template/Image
-                        <input type="file" id="bgImageUpload" accept="image/*" class="hidden">
-                    </label>
-                </div>
-            </div>
-
-            <!-- Dashboard Main Content Split: Hand Raises + Grid Monitor -->
-            <div class="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-4">
-                
-                <!-- Hand Raise Alert Panel -->
-                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col lg:col-span-1">
-                    <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
-                        <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2">
-                            <i class="fa-solid fa-hand text-amber-500"></i> Help Requests
-                        </h3>
-                        <span id="handCountBadge" class="bg-amber-100 text-amber-800 text-xs font-bold px-2 py-0.5 rounded-full">0</span>
-                    </div>
-                    <div id="handRaiseList" class="flex-1 overflow-y-auto space-y-2 max-h-64 lg:max-h-none">
-                        <div class="text-center text-xs text-slate-400 py-6">No pending help requests</div>
-                    </div>
-                </div>
-
-                <!-- Live Grid Monitor -->
-                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col lg:col-span-3">
-                    <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
-                        <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2">
-                            <i class="fa-solid fa-border-all text-indigo-500"></i> Live Student Canvases
-                        </h3>
-                        <span class="text-xs text-slate-400">Click any student screen to grade or assist</span>
-                    </div>
-
-                    <!-- Grid Container -->
-                    <div id="studentGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 overflow-y-auto flex-1 min-h-[300px]">
-                        <!-- Dynamically Populated Student Previews -->
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- STUDENT WORKSPACE VIEW -->
-        <section id="studentWorkspace" class="hidden flex-1 flex flex-col space-y-3">
-            <!-- Toolbar -->
-            <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-200 flex flex-wrap items-center justify-between gap-3">
-                <!-- Slide Nav -->
-                <div class="flex items-center space-x-2">
-                    <span class="text-xs font-bold text-slate-500 uppercase">Slide:</span>
-                    <div id="studentSlideTabs" class="flex items-center space-x-1"></div>
-                </div>
-
-                <!-- Canvas Tools -->
-                <div class="flex items-center space-x-1 sm:space-x-2 bg-slate-50 p-1 rounded-lg border border-slate-200">
-                    <button id="toolPen" class="tool-btn active p-2 rounded text-xs font-semibold flex items-center gap-1 bg-indigo-600 text-white">
-                        <i class="fa-solid fa-pen"></i> <span class="hidden sm:inline">Pen</span>
-                    </button>
-                    <button id="toolEraser" class="tool-btn p-2 rounded text-xs font-semibold flex items-center gap-1 text-slate-600 hover:bg-slate-200">
-                        <i class="fa-solid fa-eraser"></i> <span class="hidden sm:inline">Eraser</span>
-                    </button>
-                    <button id="toolText" class="tool-btn p-2 rounded text-xs font-semibold flex items-center gap-1 text-slate-600 hover:bg-slate-200">
-                        <i class="fa-solid fa-font"></i> <span class="hidden sm:inline">Text</span>
-                    </button>
-                    <div class="h-4 w-px bg-slate-300 mx-1"></div>
-                    <!-- Color Picker -->
-                    <input type="color" id="colorPicker" value="#2563eb" class="w-7 h-7 rounded border-0 cursor-pointer bg-transparent">
-                    <!-- Size Picker -->
-                    <select id="sizePicker" class="text-xs border border-slate-300 rounded px-1.5 py-1 bg-white">
-                        <option value="2">Thin</option>
-                        <option value="5" selected>Medium</option>
-                        <option value="12">Thick</option>
-                    </select>
-                    <button id="clearCanvasBtn" class="p-2 rounded text-xs font-semibold text-rose-600 hover:bg-rose-50 ml-1" title="Clear Canvas">
-                        <i class="fa-solid fa-trash-can"></i>
-                    </button>
-                </div>
-
-                <!-- Raise Hand Button -->
-                <button id="raiseHandBtn" class="bg-amber-500 hover:bg-amber-600 text-white font-semibold px-3.5 py-1.5 rounded-lg text-xs shadow-sm transition-all flex items-center gap-1.5">
-                    <i class="fa-solid fa-hand"></i> <span id="raiseHandText">Please Help!</span>
-                </button>
-            </div>
-
-            <!-- Canvas Container -->
-            <div class="flex-1 bg-white rounded-xl shadow-md border border-slate-200 flex items-center justify-center p-2 relative overflow-hidden min-h-[450px]">
-                <div id="canvasWrapper" class="canvas-container w-full h-full max-w-[800px] max-h-[500px] bg-white rounded border border-slate-300 relative shadow-inner">
-                    <canvas id="studentCanvas" class="w-full h-full block rounded"></canvas>
-                </div>
-            </div>
-        </section>
-
-    </main>
-
-    <!-- HELP / GRADING MODAL FOR TEACHER -->
-    <div id="gradingModal" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden max-h-[90vh]">
-            <!-- Modal Header -->
-            <div class="bg-slate-800 text-white p-4 flex justify-between items-center">
-                <div class="flex items-center space-x-3">
-                    <i class="fa-solid fa-user-pen text-indigo-400"></i>
-                    <div>
-                        <h3 id="modalStudentName" class="font-bold leading-tight">Student Name</h3>
-                        <p id="modalSlideInfo" class="text-xs text-slate-400">Assisting on Slide 1</p>
-                    </div>
-                </div>
-                <button id="closeGradingModalBtn" class="text-slate-400 hover:text-white text-xl">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-
-            <!-- Modal Toolbar -->
-            <div class="bg-slate-100 p-2 px-4 border-b border-slate-200 flex items-center justify-between">
-                <div class="flex items-center space-x-2">
-                    <span class="text-xs text-slate-500 font-semibold">Teacher Feedback Pen:</span>
-                    <input type="color" id="modalColorPicker" value="#dc2626" class="w-6 h-6 rounded border-0 cursor-pointer bg-transparent">
-                    <select id="modalSizePicker" class="text-xs border border-slate-300 rounded px-1.5 py-1 bg-white">
-                        <option value="3" selected>Medium</option>
-                        <option value="8">Thick</option>
-                    </select>
-                </div>
-                <button id="resolveHandBtn" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded-md flex items-center gap-1 transition-colors">
-                    <i class="fa-solid fa-check"></i> Resolve Help Request
-                </button>
-            </div>
-
-            <!-- Modal Canvas Wrapper -->
-            <div class="flex-1 bg-slate-200 p-4 flex items-center justify-center overflow-auto">
-                <div class="canvas-container w-[750px] h-[450px] bg-white rounded border border-slate-400 shadow-md relative">
-                    <canvas id="teacherOverlayCanvas" class="w-full h-full block rounded"></canvas>
-                </div>
-            </div>
+      <!-- Canvas Box Area -->
+      <div class="bg-white rounded-xl shadow-md border border-slate-200 p-4 flex flex-col items-center">
+        <!-- Optional Slide Prompt Display -->
+        <div id="slidePromptContainer" class="w-full mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-sm hidden">
+          <span class="font-bold"><i class="fa-solid fa-circle-question text-amber-600 mr-1"></i> Prompt:</span>
+          <span id="slidePromptText">---</span>
         </div>
+
+        <!-- Interactive Canvas Holder -->
+        <div id="canvasWrapper" class="canvas-container w-full max-w-4xl aspect-[4/3] bg-white border border-slate-300 rounded-lg shadow-inner relative overflow-hidden flex items-center justify-center">
+          <canvas id="mainCanvas" class="w-full h-full touch-none cursor-crosshair"></canvas>
+        </div>
+      </div>
+
     </div>
 
-    <!-- Notification Toast -->
-    <div id="toast" class="fixed bottom-5 right-5 bg-slate-800 text-white px-4 py-3 rounded-xl shadow-xl flex items-center space-x-3 translate-y-20 opacity-0 transition-all duration-300 pointer-events-none z-50">
-        <i id="toastIcon" class="fa-solid fa-circle-info text-indigo-400"></i>
-        <span id="toastMsg" class="text-sm font-medium">Notification message</span>
+  </main>
+
+  <!-- CREATE ASSIGNMENT MODAL -->
+  <div id="createAssignmentModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+      
+      <div class="p-5 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+        <h3 class="text-xl font-bold text-slate-800">Create New Multi-Slide Assignment</h3>
+        <button id="closeModalBtn" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+      </div>
+
+      <form id="createAssignmentForm" class="p-6 overflow-y-auto space-y-6 flex-1">
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-1">Assignment Title</label>
+          <input type="text" id="assignTitleInput" required placeholder="e.g. Math Fractions Exercise 1" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-1">Instructions / Description</label>
+          <textarea id="assignDescInput" rows="2" placeholder="Instructions for students..." class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"></textarea>
+        </div>
+
+        <!-- Slides Builder -->
+        <div class="space-y-4">
+          <div class="flex justify-between items-center">
+            <h4 class="text-sm font-bold text-slate-800 uppercase tracking-wider">Assignment Slides</h4>
+            <button type="button" id="addSlideConfigBtn" class="text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 font-semibold px-3 py-1.5 rounded-lg border border-indigo-200 transition">
+              <i class="fa-solid fa-plus mr-1"></i> Add Slide
+            </button>
+          </div>
+
+          <div id="slidesConfigContainer" class="space-y-4">
+            <!-- Dynamic slide input cards generated here -->
+          </div>
+        </div>
+
+        <div class="pt-4 border-t border-slate-200 flex justify-end gap-3">
+          <button type="button" id="cancelModalBtn" class="px-5 py-2.5 rounded-lg border border-slate-300 text-slate-600 font-medium hover:bg-slate-50">Cancel</button>
+          <button type="submit" class="px-6 py-2.5 rounded-lg bg-indigo-600 text-white font-bold hover:bg-indigo-700 shadow-sm transition">Publish Assignment</button>
+        </div>
+      </form>
+
     </div>
+  </div>
 
-    <!-- APP SCRIPT & LOGIC -->
-    <script type="module">
-        // Firebase Modular Import setup using CDN
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { 
-            getFirestore, collection, doc, setDoc, getDoc, updateDoc, onSnapshot, deleteDoc 
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { 
-            getAuth, signInAnonymously, signInWithCustomToken 
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+  <script>
+    // ==========================================
+    // 1. FIREBASE CONFIGURATION & INITIALIZATION
+    // ==========================================
+    const firebaseConfig = {
+      apiKey: "AIzaSyABgpqO6L_Ctm4HXUajQpTSQ7wJVIsraP0",
+      authDomain: "classwork1314.firebaseapp.com",
+      databaseURL: "https://classwork1314-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "classwork1314",
+      storageBucket: "classwork1314.firebasestorage.app",
+      messagingSenderId: "1073751121093",
+      appId: "1:1073751121093:web:3cd277765b0cd61cea24ac",
+      measurementId: "G-P61WJLX7WF"
+    };
 
-        // Application State Management
-        const state = {
-            role: null, // 'teacher' or 'student'
-            userName: '',
-            classCode: '',
-            currentSlide: 1,
-            totalSlides: 2,
-            activeTool: 'pen',
-            color: '#2563eb',
-            brushSize: 5,
-            isDrawing: false,
-            handRaised: false,
-            activeStudentId: null, // For teacher grading mode
-            db: null,
-            auth: null,
-            appId: 'classkick-demo',
-            unsubscribeListeners: []
-        };
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const auth = firebase.auth();
 
-        // Initialize Firebase with fallback or provided global config
-        <!-- Include Firebase SDK scripts in your <head> or before your script -->
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    // Enable offline persistence gracefully if supported
+    db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
 
-<script>
-  // Your exact Firebase configuration
-  const firebaseConfig = {
-    apiKey: "AIzaSyABgpqO6L_Ctm4HXUajQpTSQ7wJVIsraP0",
-    authDomain: "classwork1314.firebaseapp.com",
-    databaseURL: "https://classwork1314-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "classwork1314",
-    storageBucket: "classwork1314.firebaseapp.com",
-    messagingSenderId: "1073751121093",
-    appId: "1:1073751121093:web:3cd277765b0cd61cea24ac",
-    measurementId: "G-P61WJLX7WF"
-  };
+    // Anonymous authentication listener
+    auth.signInAnonymously().catch(err => {
+      console.error("Auth error:", err);
+      showToast("Firebase Authentication Failed", "error");
+    });
 
-  // Initialize Firebase for Browser
-  firebase.initializeApp(firebaseConfig);
-  const auth = firebase.auth();
-  const db = firebase.firestore();
-</script>
+    // ==========================================
+    // 2. APPLICATION STATE
+    // ==========================================
+    let currentUserRole = null; // 'teacher' or 'student'
+    let currentAssignmentId = null;
+    let currentAssignmentData = null;
+    let currentSessionCode = null;
 
-        const app = initializeApp(firebaseConfig);
-        state.db = getFirestore(app);
-        state.auth = getAuth(app);
+    // Student specific state
+    let studentId = null;
+    let studentName = null;
 
-        // Helper: Firestore Collections Paths (Rule 1 Compliant)
-        function getPublicCollectionPath(colName) {
-            const appId = typeof __app_id !== 'undefined' ? __app_id : state.appId;
-            return collection(state.db, 'artifacts', appId, 'public', 'data', colName);
-        }
-        function getPublicDocPath(colName, docId) {
-            const appId = typeof __app_id !== 'undefined' ? __app_id : state.appId;
-            return doc(state.db, 'artifacts', appId, 'public', 'data', colName, docId);
-        }
+    // Active inspection state (for teacher inspecting a student)
+    let inspectingStudentId = null;
 
-        // Authenticate anonymously or via custom token
-        async function ensureAuth() {
-            if (state.auth.currentUser) return state.auth.currentUser;
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(state.auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(state.auth);
-                }
-                return state.auth.currentUser;
-            } catch (err) {
-                console.warn("Auth initialization warning:", err);
-                return null;
-            }
-        }
+    // Slide & Canvas State
+    let currentSlideIndex = 0;
+    let activeTool = 'pen'; // 'pen', 'eraser', 'text'
+    let currentColor = '#1e293b';
+    let currentLineWidth = 4;
+    let isDrawing = false;
+    let lastX = 0;
+    let lastY = 0;
 
-        // UI Element References
-        const elements = {
-            roleSelectSection: document.getElementById('roleSelectSection'),
-            teacherSetupSection: document.getElementById('teacherSetupSection'),
-            studentSetupSection: document.getElementById('studentSetupSection'),
-            teacherDashboard: document.getElementById('teacherDashboard'),
-            studentWorkspace: document.getElementById('studentWorkspace'),
-            roleBadge: document.getElementById('roleBadge'),
-            sessionInfo: document.getElementById('sessionInfo'),
-            displayClassCode: document.getElementById('displayClassCode'),
-            displayUserName: document.getElementById('displayUserName'),
-            
-            // Buttons
-            selectTeacherBtn: document.getElementById('selectTeacherBtn'),
-            selectStudentBtn: document.getElementById('selectStudentBtn'),
-            startTeacherSessionBtn: document.getElementById('startTeacherSessionBtn'),
-            startStudentSessionBtn: document.getElementById('startStudentSessionBtn'),
-            leaveRoleBtn: document.getElementById('leaveRoleBtn'),
-            copyCodeBtn: document.getElementById('copyCodeBtn'),
-            addSlideBtn: document.getElementById('addSlideBtn'),
-            bgImageUpload: document.getElementById('bgImageUpload'),
-            raiseHandBtn: document.getElementById('raiseHandBtn'),
-            raiseHandText: document.getElementById('raiseHandText'),
-            clearCanvasBtn: document.getElementById('clearCanvasBtn'),
-            
-            // Canvas elements
-            studentCanvas: document.getElementById('studentCanvas'),
-            teacherOverlayCanvas: document.getElementById('teacherOverlayCanvas'),
-            gradingModal: document.getElementById('gradingModal'),
-            closeGradingModalBtn: document.getElementById('closeGradingModalBtn'),
-            resolveHandBtn: document.getElementById('resolveHandBtn'),
-            
-            // Tool Pickers
-            colorPicker: document.getElementById('colorPicker'),
-            sizePicker: document.getElementById('sizePicker'),
-            modalColorPicker: document.getElementById('modalColorPicker'),
-            modalSizePicker: document.getElementById('modalSizePicker'),
-            
-            // Containers & Tabs
-            teacherSlideTabs: document.getElementById('teacherSlideTabs'),
-            studentSlideTabs: document.getElementById('studentSlideTabs'),
-            studentGrid: document.getElementById('studentGrid'),
-            handRaiseList: document.getElementById('handRaiseList'),
-            handCountBadge: document.getElementById('handCountBadge'),
-            
-            // Toast
-            toast: document.getElementById('toast'),
-            toastMsg: document.getElementById('toastMsg')
-        };
+    // Realtime Firestore Unsubscribe handles
+    let unsubAssignment = null;
+    let unsubStudents = null;
+    let unsubSlideWork = null;
 
-        // Setup Canvas Contexts
-        let studentCtx = null;
-        let modalCtx = null;
-        let slideBackgrounds = {}; // Local cache for slide backgrounds
+    // ==========================================
+    // 3. UI ELEMENT REFERENCES
+    // ==========================================
+    const roleSelectionScreen = document.getElementById('roleSelectionScreen');
+    const teacherDashboard = document.getElementById('teacherDashboard');
+    const studentJoinScreen = document.getElementById('studentJoinScreen');
+    const workspaceScreen = document.getElementById('workspaceScreen');
+    const roleBadge = document.getElementById('roleBadge');
+    const resetRoleBtn = document.getElementById('resetRoleBtn');
 
-        // DOM Initialization
-        window.addEventListener('DOMContentLoaded', () => {
-            initEventListeners();
-            setupCanvasResolution(elements.studentCanvas);
-            studentCtx = elements.studentCanvas.getContext('2d');
-            
-            setupCanvasResolution(elements.teacherOverlayCanvas);
-            modalCtx = elements.teacherOverlayCanvas.getContext('2d');
+    const mainCanvas = document.getElementById('mainCanvas');
+    const ctx = mainCanvas.getContext('2d');
+    const canvasWrapper = document.getElementById('canvasWrapper');
+
+    // ==========================================
+    // 4. ROUTING & ROLE MANAGEMENT
+    // ==========================================
+    document.getElementById('selectTeacherBtn').addEventListener('click', () => switchRole('teacher'));
+    document.getElementById('selectStudentBtn').addEventListener('click', () => switchRole('student'));
+    resetRoleBtn.addEventListener('click', resetRole);
+
+    function switchRole(role) {
+      currentUserRole = role;
+      roleSelectionScreen.classList.add('hidden');
+      resetRoleBtn.classList.remove('hidden');
+
+      if (role === 'teacher') {
+        roleBadge.textContent = "Teacher Mode";
+        roleBadge.className = "bg-indigo-800 text-indigo-100 px-3 py-1 rounded-full font-medium shadow-inner";
+        teacherDashboard.classList.remove('hidden');
+      } else {
+        roleBadge.textContent = "Student Mode";
+        roleBadge.className = "bg-emerald-800 text-emerald-100 px-3 py-1 rounded-full font-medium shadow-inner";
+        studentJoinScreen.classList.remove('hidden');
+      }
+    }
+
+    function resetRole() {
+      // Unsubscribe listeners
+      if (unsubAssignment) unsubAssignment();
+      if (unsubStudents) unsubStudents();
+      if (unsubSlideWork) unsubSlideWork();
+
+      currentUserRole = null;
+      currentAssignmentId = null;
+      currentAssignmentData = null;
+      inspectingStudentId = null;
+
+      teacherDashboard.classList.add('hidden');
+      studentJoinScreen.classList.add('hidden');
+      workspaceScreen.classList.add('hidden');
+      document.getElementById('teacherActiveSection').classList.add('hidden');
+      
+      roleSelectionScreen.classList.remove('hidden');
+      resetRoleBtn.classList.add('hidden');
+      roleBadge.textContent = "Connecting...";
+    }
+
+    // ==========================================
+    // 5. TEACHER ASSIGNMENT CREATION
+    // ==========================================
+    const createAssignmentModal = document.getElementById('createAssignmentModal');
+    const slidesConfigContainer = document.getElementById('slidesConfigContainer');
+    let slideConfigCount = 0;
+
+    document.getElementById('openCreateModalBtn').addEventListener('click', () => {
+      slidesConfigContainer.innerHTML = '';
+      slideConfigCount = 0;
+      addSlideConfigRow(); // Default 1 slide
+      createAssignmentModal.classList.remove('hidden');
+    });
+
+    document.getElementById('closeModalBtn').addEventListener('click', () => createAssignmentModal.classList.add('hidden'));
+    document.getElementById('cancelModalBtn').addEventListener('click', () => createAssignmentModal.classList.add('hidden'));
+    document.getElementById('addSlideConfigBtn').addEventListener('click', addSlideConfigRow);
+
+    function addSlideConfigRow() {
+      slideConfigCount++;
+      const slideDiv = document.createElement('div');
+      slideDiv.className = "p-4 bg-slate-50 border border-slate-200 rounded-lg space-y-3 relative slide-config-item";
+      slideDiv.innerHTML = `
+        <div class="flex justify-between items-center">
+          <span class="font-bold text-xs text-indigo-600 uppercase">Slide ${slideConfigCount}</span>
+          ${slideConfigCount > 1 ? `<button type="button" class="text-rose-500 hover:text-rose-700 text-xs font-semibold remove-slide-btn"><i class="fa-solid fa-trash"></i> Remove</button>` : ''}
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Slide Prompt / Question Text</label>
+          <input type="text" class="slide-prompt-input w-full px-3 py-1.5 text-sm border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500" placeholder="e.g. Draw a fraction representing 3/4 or solve: 12 x 4">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Background Image URL (Optional)</label>
+          <input type="url" class="slide-bg-input w-full px-3 py-1.5 text-sm border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500" placeholder="https://example.com/worksheet.png">
+        </div>
+      `;
+
+      slidesConfigContainer.appendChild(slideDiv);
+
+      const removeBtn = slideDiv.querySelector('.remove-slide-btn');
+      if (removeBtn) {
+        removeBtn.addEventListener('click', () => {
+          slideDiv.remove();
+          reindexSlideConfigs();
+        });
+      }
+    }
+
+    function reindexSlideConfigs() {
+      const items = slidesConfigContainer.querySelectorAll('.slide-config-item');
+      slideConfigCount = items.length;
+      items.forEach((item, idx) => {
+        item.querySelector('span').textContent = `Slide ${idx + 1}`;
+      });
+    }
+
+    document.getElementById('createAssignmentForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const title = document.getElementById('assignTitleInput').value.trim();
+      const desc = document.getElementById('assignDescInput').value.trim();
+
+      const slideItems = slidesConfigContainer.querySelectorAll('.slide-config-item');
+      const slides = [];
+
+      slideItems.forEach(item => {
+        slides.push({
+          prompt: item.querySelector('.slide-prompt-input').value.trim(),
+          bgUrl: item.querySelector('.slide-bg-input').value.trim()
+        });
+      });
+
+      if (slides.length === 0) {
+        showToast("Add at least one slide", "error");
+        return;
+      }
+
+      // Generate 6-digit random code
+      const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+      try {
+        const docRef = await db.collection('assignments').add({
+          title,
+          description: desc,
+          sessionCode: code,
+          slides: slides,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
-        function setupCanvasResolution(canvas) {
-            canvas.width = 800;
-            canvas.height = 500;
+        currentAssignmentId = docRef.id;
+        currentSessionCode = code;
+
+        createAssignmentModal.classList.add('hidden');
+        showToast(`Assignment created! Code: ${code}`, "success");
+        
+        loadTeacherAssignmentView(docRef.id);
+      } catch (err) {
+        console.error("Error creating assignment:", err);
+        showToast("Error creating assignment: " + err.message, "error");
+      }
+    });
+
+    // ==========================================
+    // 6. TEACHER LIVE MONITORING VIEW
+    // ==========================================
+    function loadTeacherAssignmentView(assignmentId) {
+      document.getElementById('teacherActiveSection').classList.remove('hidden');
+
+      // Listen to assignment details
+      if (unsubAssignment) unsubAssignment();
+      unsubAssignment = db.collection('assignments').doc(assignmentId).onSnapshot(doc => {
+        if (!doc.exists) return;
+        currentAssignmentData = doc.data();
+        document.getElementById('currentAssignmentTitle').textContent = currentAssignmentData.title;
+        document.getElementById('currentAssignmentDesc').textContent = currentAssignmentData.description || 'No instructions provided.';
+        document.getElementById('currentSessionCode').textContent = currentAssignmentData.sessionCode;
+        document.getElementById('shareCodeText').textContent = currentAssignmentData.sessionCode;
+      });
+
+      // Listen to joined students live
+      if (unsubStudents) unsubStudents();
+      unsubStudents = db.collection('assignments').doc(assignmentId).collection('students').onSnapshot(snapshot => {
+        const grid = document.getElementById('studentsGrid');
+        const countBadge = document.getElementById('studentCountBadge');
+        
+        countBadge.textContent = `${snapshot.size} Student${snapshot.size === 1 ? '' : 's'} Joined`;
+
+        if (snapshot.empty) {
+          grid.innerHTML = `
+            <div id="emptyStudentState" class="col-span-full text-center py-12 text-slate-400">
+              <i class="fa-solid fa-user-clock text-4xl mb-3"></i>
+              <p>Waiting for students to join with code <span class="font-bold text-indigo-600">${currentSessionCode}</span>...</p>
+            </div>
+          `;
+          return;
         }
 
-        // Setup UI Event Handlers
-        function initEventListeners() {
-            // Navigation Handlers
-            elements.selectTeacherBtn.addEventListener('click', () => showSection(elements.teacherSetupSection));
-            elements.selectStudentBtn.addEventListener('click', () => showSection(elements.studentSetupSection));
-            
-            document.querySelectorAll('.backToRoleBtn').forEach(btn => {
-                btn.addEventListener('click', () => showSection(elements.roleSelectSection));
+        grid.innerHTML = '';
+        snapshot.forEach(doc => {
+          const student = doc.data();
+          const card = document.createElement('div');
+          card.className = "bg-slate-50 border border-slate-200 hover:border-indigo-400 p-4 rounded-xl shadow-sm transition hover:shadow-md flex flex-col justify-between cursor-pointer group";
+          
+          card.innerHTML = `
+            <div class="flex justify-between items-start mb-3">
+              <div>
+                <h5 class="font-bold text-slate-800 group-hover:text-indigo-600 transition">${escapeHtml(student.name)}</h5>
+                <span class="text-xs text-slate-400">Active</span>
+              </div>
+              <span class="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded font-semibold">
+                ${currentAssignmentData?.slides?.length || 1} Slides
+              </span>
+            </div>
+            <div class="h-32 bg-white border border-slate-200 rounded flex items-center justify-center overflow-hidden relative">
+              <img id="thumb-${doc.id}" class="w-full h-full object-contain" src="" alt="Live Preview">
+              <div class="absolute inset-0 bg-indigo-900/10 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                <span class="bg-indigo-600 text-white text-xs px-3 py-1.5 rounded-lg shadow font-medium">Inspect & Annotate</span>
+              </div>
+            </div>
+          `;
+
+          card.addEventListener('click', () => openWorkspaceForInspection(doc.id, student.name));
+          grid.appendChild(card);
+
+          // Fetch latest slide preview image for student
+          db.collection('assignments').doc(assignmentId)
+            .collection('students').doc(doc.id)
+            .collection('slides').doc('slide_0').onSnapshot(slideDoc => {
+              const imgEl = document.getElementById(`thumb-${doc.id}`);
+              if (imgEl && slideDoc.exists && slideDoc.data().canvasData) {
+                imgEl.src = slideDoc.data().canvasData;
+              }
             });
+        });
+      });
+    }
 
-            elements.leaveRoleBtn.addEventListener('click', exitSession);
+    // Teacher inspects individual student workspace
+    function openWorkspaceForInspection(stId, stName) {
+      inspectingStudentId = stId;
+      teacherDashboard.classList.add('hidden');
+      workspaceScreen.classList.remove('hidden');
 
-            // Session Launchers
-            elements.startTeacherSessionBtn.addEventListener('click', handleStartTeacher);
-            elements.startStudentSessionBtn.addEventListener('click', handleStartStudent);
+      document.getElementById('exitWorkspaceBtn').classList.remove('hidden');
+      document.getElementById('workspaceTitle').textContent = `Inspecting: ${stName}`;
+      document.getElementById('workspaceSubtext').textContent = "Drawings live-sync with the student canvas";
 
-            // Copy Class Code
-            elements.copyCodeBtn.addEventListener('click', () => {
-                navigator.clipboard.writeText(state.classCode);
-                showToast("Class code copied to clipboard!");
-            });
+      currentSlideIndex = 0;
+      setupSlideWorkspace();
+    }
 
-            // Drawing tools for Student
-            document.querySelectorAll('.tool-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    document.querySelectorAll('.tool-btn').forEach(b => {
-                        b.classList.remove('bg-indigo-600', 'text-white');
-                        b.classList.add('text-slate-600');
-                    });
-                    const target = e.currentTarget;
-                    target.classList.add('bg-indigo-600', 'text-white');
-                    target.classList.remove('text-slate-600');
+    document.getElementById('exitWorkspaceBtn').addEventListener('click', () => {
+      workspaceScreen.classList.add('hidden');
+      teacherDashboard.classList.remove('hidden');
+      inspectingStudentId = null;
+    });
 
-                    if (target.id === 'toolPen') state.activeTool = 'pen';
-                    if (target.id === 'toolEraser') state.activeTool = 'eraser';
-                    if (target.id === 'toolText') state.activeTool = 'text';
-                });
-            });
+    // ==========================================
+    // 7. STUDENT JOIN & WORKSPACE
+    // ==========================================
+    document.getElementById('studentJoinForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
 
-            elements.colorPicker.addEventListener('change', (e) => state.color = e.target.value);
-            elements.sizePicker.addEventListener('change', (e) => state.brushSize = parseInt(e.target.value));
-            elements.clearCanvasBtn.addEventListener('click', clearStudentCanvas);
+      const code = document.getElementById('joinCodeInput').value.trim().toUpperCase();
+      const name = document.getElementById('studentNameInput').value.trim();
 
-            // Canvas Drawing Events (Student)
-            const sc = elements.studentCanvas;
-            sc.addEventListener('mousedown', startDrawing);
-            sc.addEventListener('mousemove', draw);
-            sc.addEventListener('mouseup', stopDrawing);
-            sc.addEventListener('mouseleave', stopDrawing);
+      if (!code || !name) return;
 
-            // Touch support for Canvas
-            sc.addEventListener('touchstart', (e) => {
-                const touch = e.touches[0];
-                const mouseEvent = new MouseEvent('mousedown', {
-                    clientX: touch.clientX,
-                    clientY: touch.clientY
-                });
-                sc.dispatchEvent(mouseEvent);
-            });
-            sc.addEventListener('touchmove', (e) => {
-                const touch = e.touches[0];
-                const mouseEvent = new MouseEvent('mousemove', {
-                    clientX: touch.clientX,
-                    clientY: touch.clientY
-                });
-                sc.dispatchEvent(mouseEvent);
-            });
-            sc.addEventListener('touchend', () => {
-                const mouseEvent = new MouseEvent('mouseup', {});
-                sc.dispatchEvent(mouseEvent);
-            });
+      try {
+        // Query assignment by sessionCode
+        const snapshot = await db.collection('assignments').where('sessionCode', '==', code).get();
 
-            // Hand Raise
-            elements.raiseHandBtn.addEventListener('click', toggleRaiseHand);
-
-            // Teacher Background Upload
-            elements.bgImageUpload.addEventListener('change', handleBgUpload);
-
-            // Teacher Add Slide
-            elements.addSlideBtn.addEventListener('click', async () => {
-                state.totalSlides++;
-                await updateDoc(getPublicDocPath('sessions', state.classCode), {
-                    totalSlides: state.totalSlides
-                });
-                showToast(`Slide ${state.totalSlides} added`);
-            });
-
-            // Grading Modal Close
-            elements.closeGradingModalBtn.addEventListener('click', () => {
-                elements.gradingModal.classList.add('hidden');
-                state.activeStudentId = null;
-            });
-
-            // Teacher Overlay Drawing Events
-            const tc = elements.teacherOverlayCanvas;
-            tc.addEventListener('mousedown', startTeacherDrawing);
-            tc.addEventListener('mousemove', drawTeacherFeedback);
-            tc.addEventListener('mouseup', stopTeacherDrawing);
-
-            elements.resolveHandBtn.addEventListener('click', resolveStudentHand);
+        if (snapshot.empty) {
+          showToast("Invalid Session Code. Please check and try again.", "error");
+          return;
         }
 
-        // Section Toggle Utility
-        function showSection(targetSection) {
-            [elements.roleSelectSection, elements.teacherSetupSection, elements.studentSetupSection, elements.teacherDashboard, elements.studentWorkspace].forEach(sec => sec.classList.add('hidden'));
-            targetSection.classList.remove('hidden');
+        const assignDoc = snapshot.docs[0];
+        currentAssignmentId = assignDoc.id;
+        currentAssignmentData = assignDoc.data();
+        studentName = name;
+
+        // Create student document
+        const studentRef = await db.collection('assignments').doc(currentAssignmentId)
+          .collection('students').add({
+            name: name,
+            joinedAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+
+        studentId = studentRef.id;
+
+        studentJoinScreen.classList.add('hidden');
+        workspaceScreen.classList.remove('hidden');
+        document.getElementById('exitWorkspaceBtn').classList.add('hidden');
+        document.getElementById('workspaceTitle').textContent = currentAssignmentData.title;
+        document.getElementById('workspaceSubtext').textContent = `Student: ${name}`;
+
+        currentSlideIndex = 0;
+        setupSlideWorkspace();
+        showToast("Joined assignment successfully!", "success");
+
+      } catch (err) {
+        console.error("Join error:", err);
+        showToast("Failed to join assignment: " + err.message, "error");
+      }
+    });
+
+    // ==========================================
+    // 8. MULTI-SLIDE & CANVAS WORKSPACE CORE
+    // ==========================================
+    function setupSlideWorkspace() {
+      updateSlideNavigationUI();
+      resizeCanvas();
+      loadCurrentSlideData();
+    }
+
+    function updateSlideNavigationUI() {
+      const totalSlides = currentAssignmentData?.slides?.length || 1;
+      document.getElementById('slideIndicator').textContent = `Slide ${currentSlideIndex + 1} of ${totalSlides}`;
+      document.getElementById('prevSlideBtn').disabled = (currentSlideIndex === 0);
+      document.getElementById('nextSlideBtn').disabled = (currentSlideIndex === totalSlides - 1);
+
+      // Slide Prompt Display
+      const promptContainer = document.getElementById('slidePromptContainer');
+      const promptText = document.getElementById('slidePromptText');
+      const currentSlidePrompt = currentAssignmentData?.slides?.[currentSlideIndex]?.prompt;
+
+      if (currentSlidePrompt) {
+        promptText.textContent = currentSlidePrompt;
+        promptContainer.classList.remove('hidden');
+      } else {
+        promptContainer.classList.add('hidden');
+      }
+    }
+
+    document.getElementById('prevSlideBtn').addEventListener('click', () => {
+      if (currentSlideIndex > 0) {
+        currentSlideIndex--;
+        setupSlideWorkspace();
+      }
+    });
+
+    document.getElementById('nextSlideBtn').addEventListener('click', () => {
+      const totalSlides = currentAssignmentData?.slides?.length || 1;
+      if (currentSlideIndex < totalSlides - 1) {
+        currentSlideIndex++;
+        setupSlideWorkspace();
+      }
+    });
+
+    // Canvas Resizing maintaining resolution aspect ratio
+    function resizeCanvas() {
+      const rect = canvasWrapper.getBoundingClientRect();
+      mainCanvas.width = rect.width;
+      mainCanvas.height = rect.height;
+      redrawBackgroundAndCanvas();
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+
+    // Dynamic background loading
+    let currentBgImage = null;
+
+    function redrawBackgroundAndCanvas() {
+      ctx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+
+      const slideConfig = currentAssignmentData?.slides?.[currentSlideIndex];
+      if (slideConfig?.bgUrl) {
+        if (!currentBgImage || currentBgImage.src !== slideConfig.bgUrl) {
+          currentBgImage = new Image();
+          currentBgImage.crossOrigin = "anonymous";
+          currentBgImage.src = slideConfig.bgUrl;
+          currentBgImage.onload = () => {
+            ctx.drawImage(currentBgImage, 0, 0, mainCanvas.width, mainCanvas.height);
+          };
+        } else {
+          ctx.drawImage(currentBgImage, 0, 0, mainCanvas.width, mainCanvas.height);
         }
-
-        // Toast Notification
-        function showToast(msg) {
-            elements.toastMsg.textContent = msg;
-            elements.toast.classList.remove('translate-y-20', 'opacity-0');
-            setTimeout(() => {
-                elements.toast.classList.add('translate-y-20', 'opacity-0');
-            }, 3000);
-        }
-
-        // --- TEACHER FLOW ---
-        async function handleStartTeacher() {
-            const name = document.getElementById('teacherNameInput').value.trim() || 'Teacher';
-            let code = document.getElementById('teacherCodeInput').value.trim().toUpperCase();
-            if (!code) code = Math.random().toString(36).substring(2, 7).toUpperCase();
-
-            state.role = 'teacher';
-            state.userName = name;
-            state.classCode = code;
-            state.totalSlides = parseInt(document.getElementById('initialSlidesCount').value);
-
-            await ensureAuth();
-
-            // Create/Update Classroom Session
-            await setDoc(getPublicDocPath('sessions', state.classCode), {
-                teacherName: name,
-                classCode: code,
-                totalSlides: state.totalSlides,
-                createdAt: new Date().toISOString()
-            });
-
-            updateHeaderUI('Teacher', name, code);
-            showSection(elements.teacherDashboard);
-
-            // Subscribe to Live Session Changes
-            subscribeTeacherView();
-            renderTeacherSlideTabs();
-        }
-
-        function updateHeaderUI(role, name, code) {
-            elements.roleBadge.textContent = role;
-            elements.roleBadge.classList.remove('hidden');
-            elements.displayUserName.textContent = name;
-            elements.displayClassCode.textContent = code;
-            elements.sessionInfo.classList.remove('hidden');
-        }
-
-        function renderTeacherSlideTabs() {
-            elements.teacherSlideTabs.innerHTML = '';
-            for (let i = 1; i <= state.totalSlides; i++) {
-                const btn = document.createElement('button');
-                btn.className = `px-3 py-1 rounded-md text-xs font-semibold transition-all ${state.currentSlide === i ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`;
-                btn.textContent = `Slide ${i}`;
-                btn.onclick = () => {
-                    state.currentSlide = i;
-                    renderTeacherSlideTabs();
-                    // Re-render live grid for newly selected slide
-                    fetchStudentsForCurrentSlide();
-                };
-                elements.teacherSlideTabs.appendChild(btn);
-            }
-        }
-
-        function subscribeTeacherView() {
-            // Listen for Session Metadata (Slide count changes, background images)
-            const unsubSession = onSnapshot(getPublicDocPath('sessions', state.classCode), (docSnap) => {
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    if (data.totalSlides && data.totalSlides !== state.totalSlides) {
-                        state.totalSlides = data.totalSlides;
-                        renderTeacherSlideTabs();
-                    }
-                    if (data.backgrounds) {
-                        slideBackgrounds = data.backgrounds;
-                    }
-                }
-            }, (err) => console.error("Session snapshot error:", err));
-
-            // Listen for Active Students & Hand Raises
-            const unsubStudents = onSnapshot(getPublicCollectionPath('workspaces'), (snapshot) => {
-                const studentDataList = [];
-                const helpRequests = [];
-
-                snapshot.forEach(doc => {
-                    const data = doc.data();
-                    if (data.classCode === state.classCode) {
-                        studentDataList.push({ id: doc.id, ...data });
-                        if (data.handRaised) {
-                            helpRequests.push({ id: doc.id, ...data });
-                        }
-                    }
-                });
-
-                renderStudentGrid(studentDataList);
-                renderHandRaisePanel(helpRequests);
-            }, (err) => console.error("Student workspaces error:", err));
-
-            state.unsubscribeListeners.push(unsubSession, unsubStudents);
-        }
-
-        function fetchStudentsForCurrentSlide() {
-            // Trigger UI sync for new slide selection
-            subscribeTeacherView();
-        }
-
-        function renderHandRaisePanel(requests) {
-            elements.handCountBadge.textContent = requests.length;
-            elements.handRaiseList.innerHTML = '';
-
-            if (requests.length === 0) {
-                elements.handRaiseList.innerHTML = `<div class="text-center text-xs text-slate-400 py-6">No pending help requests</div>`;
-                return;
-            }
-
-            requests.forEach(req => {
-                const item = document.createElement('div');
-                item.className = 'bg-amber-50 border border-amber-200 rounded-lg p-2.5 flex items-center justify-between text-xs cursor-pointer hover:bg-amber-100 transition-colors';
-                item.innerHTML = `
-                    <div class="flex items-center space-x-2">
-                        <i class="fa-solid fa-hand text-amber-600 animate-bounce"></i>
-                        <div>
-                            <strong class="text-slate-800 block">${escapeHtml(req.studentName)}</strong>
-                            <span class="text-slate-500 text-[10px]">Requested help on Slide ${req.currentSlide || 1}</span>
-                        </div>
-                    </div>
-                    <button class="bg-indigo-600 text-white px-2 py-1 rounded font-semibold text-[10px]">Assist</button>
-                `;
-                item.onclick = () => openGradingModal(req);
-                elements.handRaiseList.appendChild(item);
-            });
-        }
-
-        function renderStudentGrid(students) {
-            elements.studentGrid.innerHTML = '';
-
-            if (students.length === 0) {
-                elements.studentGrid.innerHTML = `
-                    <div class="col-span-full flex flex-col items-center justify-center py-12 text-slate-400">
-                        <i class="fa-solid fa-users-slash text-4xl mb-2"></i>
-                        <p class="text-sm">No students joined yet. Share class code: <strong class="font-mono text-slate-700">${state.classCode}</strong></p>
-                    </div>
-                `;
-                return;
-            }
-
-            students.forEach(st => {
-                const slideKey = `slide_${state.currentSlide}`;
-                const canvasData = st.slides && st.slides[slideKey] ? st.slides[slideKey].canvasData : null;
-
-                const card = document.createElement('div');
-                card.className = `border rounded-xl p-3 bg-white hover:shadow-md transition-all cursor-pointer flex flex-col ${st.handRaised ? 'border-amber-400 ring-2 ring-amber-100' : 'border-slate-200'}`;
-                
-                card.innerHTML = `
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="font-bold text-xs text-slate-700 truncate max-w-[120px]">${escapeHtml(st.studentName)}</span>
-                        ${st.handRaised ? '<span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1"><i class="fa-solid fa-hand"></i> Help</span>' : '<span class="text-[10px] text-slate-400">Active</span>'}
-                    </div>
-                    <div class="bg-slate-50 border border-slate-200 rounded relative aspect-[16/10] overflow-hidden flex items-center justify-center">
-                        <img id="preview_${st.id}" src="${canvasData || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'60\'><text x=\'50%\' y=\'50%\' fill=\'%23cbd5e1\' font-size=\'10\' text-anchor=\'middle\' window-alignment=\'middle\'>Empty Canvas</text></svg>'}" class="w-full h-full object-contain">
-                    </div>
-                `;
-
-                card.onclick = () => openGradingModal(st);
-                elements.studentGrid.appendChild(card);
-            });
-        }
-
-        async function handleBgUpload(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = async (evt) => {
-                const dataUrl = evt.target.result;
-                const slideKey = `slide_${state.currentSlide}`;
-
-                await updateDoc(getPublicDocPath('sessions', state.classCode), {
-                    [`backgrounds.${slideKey}`]: dataUrl
-                });
-
-                showToast(`Background uploaded for Slide ${state.currentSlide}`);
-            };
-            reader.readAsDataURL(file);
-        }
-
-        // --- STUDENT FLOW ---
-        async function handleStartStudent() {
-            const name = document.getElementById('studentNameInput').value.trim();
-            const code = document.getElementById('studentCodeInput').value.trim().toUpperCase();
-
-            if (!name || !code) {
-                showToast("Please enter both your name and classroom code.");
-                return;
-            }
-
-            await ensureAuth();
-
-            // Verify classroom session exists
-            const sessionDoc = await getDoc(getPublicDocPath('sessions', code));
-            if (!sessionDoc.exists()) {
-                showToast("Invalid Class Code. Please check with your teacher.");
-                return;
-            }
-
-            const sessionData = sessionDoc.data();
-            state.role = 'student';
-            state.userName = name;
-            state.classCode = code;
-            state.totalSlides = sessionData.totalSlides || 1;
-
-            updateHeaderUI('Student', name, code);
-            showSection(elements.studentWorkspace);
-
-            // Register Student Workspace Document
-            const studentDocId = `${code}_${name.replace(/\s+/g, '_')}`;
-            state.studentDocId = studentDocId;
-
-            await setDoc(getPublicDocPath('workspaces', studentDocId), {
-                studentName: name,
-                classCode: code,
-                currentSlide: state.currentSlide,
-                handRaised: false,
-                lastUpdated: new Date().toISOString()
-            }, { merge: true });
-
-            renderStudentSlideTabs();
-            subscribeStudentView();
-        }
-
-        function renderStudentSlideTabs() {
-            elements.studentSlideTabs.innerHTML = '';
-            for (let i = 1; i <= state.totalSlides; i++) {
-                const btn = document.createElement('button');
-                btn.className = `px-3 py-1 rounded-md text-xs font-semibold transition-all ${state.currentSlide === i ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`;
-                btn.textContent = `Slide ${i}`;
-                btn.onclick = () => {
-                    saveStudentCanvasLocally();
-                    state.currentSlide = i;
-                    renderStudentSlideTabs();
-                    loadStudentCanvasForSlide();
-                };
-                elements.studentSlideTabs.appendChild(btn);
-            }
-        }
-
-        function subscribeStudentView() {
-            // Listen for Session updates (e.g. background uploads or teacher adding slides)
-            const unsubSession = onSnapshot(getPublicDocPath('sessions', state.classCode), (docSnap) => {
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    if (data.totalSlides && data.totalSlides !== state.totalSlides) {
-                        state.totalSlides = data.totalSlides;
-                        renderStudentSlideTabs();
-                    }
-                    if (data.backgrounds) {
-                        slideBackgrounds = data.backgrounds;
-                        drawCanvasBackground();
-                    }
-                }
-            }, (err) => console.error("Student session listen error:", err));
-
-            // Listen for teacher feedback/grading on own canvas
-            const unsubOwnWorkspace = onSnapshot(getPublicDocPath('workspaces', state.studentDocId), (docSnap) => {
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    if (data.handRaised !== undefined) {
-                        state.handRaised = data.handRaised;
-                        updateHandBtnUI();
-                    }
-                    // Remote update from teacher annotations
-                    const slideKey = `slide_${state.currentSlide}`;
-                    if (data.slides && data.slides[slideKey] && data.slides[slideKey].teacherFeedback) {
-                        applyTeacherFeedbackToCanvas(data.slides[slideKey].teacherFeedback);
-                    }
-                }
-            }, (err) => console.error("Workspace listener error:", err));
-
-            state.unsubscribeListeners.push(unsubSession, unsubOwnWorkspace);
-            loadStudentCanvasForSlide();
-        }
-
-        // --- DRAWING CANVAS ENGINE ---
-        function drawCanvasBackground() {
-            const slideKey = `slide_${state.currentSlide}`;
-            const bgUrl = slideBackgrounds[slideKey];
-
-            if (bgUrl) {
-                const img = new Image();
-                img.onload = () => {
-                    studentCtx.drawImage(img, 0, 0, elements.studentCanvas.width, elements.studentCanvas.height);
-                };
-                img.src = bgUrl;
-            } else {
-                studentCtx.fillStyle = '#ffffff';
-                studentCtx.fillRect(0, 0, elements.studentCanvas.width, elements.studentCanvas.height);
-            }
-        }
-
-        function getCanvasCoordinates(e, canvas) {
-            const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            return {
-                x: (e.clientX - rect.left) * scaleX,
-                y: (e.clientY - rect.top) * scaleY
-            };
-        }
-
-        function startDrawing(e) {
-            if (state.activeTool === 'text') {
-                const pos = getCanvasCoordinates(e, elements.studentCanvas);
-                const text = prompt("Enter text to add:");
-                if (text) {
-                    studentCtx.font = "18px Inter, sans-serif";
-                    studentCtx.fillStyle = state.color;
-                    studentCtx.fillText(text, pos.x, pos.y);
-                    syncStudentCanvasToFirebase();
-                }
-                return;
-            }
-
-            state.isDrawing = true;
-            const pos = getCanvasCoordinates(e, elements.studentCanvas);
-            studentCtx.beginPath();
-            studentCtx.moveTo(pos.x, pos.y);
-        }
-
-        function draw(e) {
-            if (!state.isDrawing) return;
-            const pos = getCanvasCoordinates(e, elements.studentCanvas);
-
-            studentCtx.lineWidth = state.brushSize;
-            studentCtx.lineCap = 'round';
-            studentCtx.lineJoin = 'round';
-
-            if (state.activeTool === 'eraser') {
-                studentCtx.strokeStyle = '#ffffff';
-            } else {
-                studentCtx.strokeStyle = state.color;
-            }
-
-            studentCtx.lineTo(pos.x, pos.y);
-            studentCtx.stroke();
-        }
-
-        function stopDrawing() {
-            if (state.isDrawing) {
-                state.isDrawing = false;
-                studentCtx.closePath();
-                syncStudentCanvasToFirebase();
-            }
-        }
-
-        function clearStudentCanvas() {
-            studentCtx.clearRect(0, 0, elements.studentCanvas.width, elements.studentCanvas.height);
-            drawCanvasBackground();
-            syncStudentCanvasToFirebase();
-        }
-
-        let syncDebounceTimer = null;
-        function syncStudentCanvasToFirebase() {
-            clearTimeout(syncDebounceTimer);
-            syncDebounceTimer = setTimeout(async () => {
-                if (!state.studentDocId) return;
-                const canvasData = elements.studentCanvas.toDataURL();
-                const slideKey = `slide_${state.currentSlide}`;
-
-                await updateDoc(getPublicDocPath('workspaces', state.studentDocId), {
-                    [`slides.${slideKey}.canvasData`]: canvasData,
-                    currentSlide: state.currentSlide,
-                    lastUpdated: new Date().toISOString()
-                });
-            }, 300); // Debounced 300ms auto-save
-        }
-
-        async function loadStudentCanvasForSlide() {
-            studentCtx.clearRect(0, 0, elements.studentCanvas.width, elements.studentCanvas.height);
-            drawCanvasBackground();
-
-            if (!state.studentDocId) return;
-            const docSnap = await getDoc(getPublicDocPath('workspaces', state.studentDocId));
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-                const slideKey = `slide_${state.currentSlide}`;
-                if (data.slides && data.slides[slideKey] && data.slides[slideKey].canvasData) {
-                    const img = new Image();
-                    img.onload = () => {
-                        studentCtx.drawImage(img, 0, 0);
-                    };
-                    img.src = data.slides[slideKey].canvasData;
-                }
-            }
-        }
-
-        function saveStudentCanvasLocally() {
-            syncStudentCanvasToFirebase();
-        }
-
-        async function toggleRaiseHand() {
-            state.handRaised = !state.handRaised;
-            updateHandBtnUI();
-
-            if (state.studentDocId) {
-                await updateDoc(getPublicDocPath('workspaces', state.studentDocId), {
-                    handRaised: state.handRaised
-                });
-                showToast(state.handRaised ? "Help request sent to teacher!" : "Help request cancelled.");
-            }
-        }
-
-        function updateHandBtnUI() {
-            if (state.handRaised) {
-                elements.raiseHandBtn.classList.remove('bg-amber-500', 'hover:bg-amber-600');
-                elements.raiseHandBtn.classList.add('bg-rose-600', 'hover:bg-rose-700', 'animate-pulse');
-                elements.raiseHandText.textContent = "Cancel Request";
-            } else {
-                elements.raiseHandBtn.classList.remove('bg-rose-600', 'hover:bg-rose-700', 'animate-pulse');
-                elements.raiseHandBtn.classList.add('bg-amber-500', 'hover:bg-amber-600');
-                elements.raiseHandText.textContent = "Please Help!";
-            }
-        }
-
-        // --- TEACHER HELP & GRADING MODAL ---
-        let isTeacherDrawing = false;
-
-        function openGradingModal(student) {
-            state.activeStudentId = student.id;
-            document.getElementById('modalStudentName').textContent = student.studentName;
-            document.getElementById('modalSlideInfo').textContent = `Assisting on Slide ${state.currentSlide}`;
-            elements.gradingModal.classList.remove('hidden');
-
-            modalCtx.clearRect(0, 0, elements.teacherOverlayCanvas.width, elements.teacherOverlayCanvas.height);
-
-            const slideKey = `slide_${state.currentSlide}`;
-            const canvasData = student.slides && student.slides[slideKey] ? student.slides[slideKey].canvasData : null;
-
-            if (canvasData) {
-                const img = new Image();
-                img.onload = () => {
-                    modalCtx.drawImage(img, 0, 0);
-                };
-                img.src = canvasData;
-            } else {
-                modalCtx.fillStyle = "#ffffff";
-                modalCtx.fillRect(0, 0, elements.teacherOverlayCanvas.width, elements.teacherOverlayCanvas.height);
-            }
-        }
-
-        function startTeacherDrawing(e) {
-            isTeacherDrawing = true;
-            const pos = getCanvasCoordinates(e, elements.teacherOverlayCanvas);
-            modalCtx.beginPath();
-            modalCtx.moveTo(pos.x, pos.y);
-        }
-
-        function drawTeacherFeedback(e) {
-            if (!isTeacherDrawing) return;
-            const pos = getCanvasCoordinates(e, elements.teacherOverlayCanvas);
-            modalCtx.lineWidth = parseInt(elements.modalSizePicker.value);
-            modalCtx.lineCap = 'round';
-            modalCtx.strokeStyle = elements.modalColorPicker.value;
-            modalCtx.lineTo(pos.x, pos.y);
-            modalCtx.stroke();
-        }
-
-        async function stopTeacherDrawing() {
-            if (isTeacherDrawing) {
-                isTeacherDrawing = false;
-                modalCtx.closePath();
-
-                // Save feedback directly back to student canvas document
-                if (state.activeStudentId) {
-                    const feedbackData = elements.teacherOverlayCanvas.toDataURL();
-                    const slideKey = `slide_${state.currentSlide}`;
-
-                    await updateDoc(getPublicDocPath('workspaces', state.activeStudentId), {
-                        [`slides.${slideKey}.canvasData`]: feedbackData,
-                        [`slides.${slideKey}.teacherFeedback`]: feedbackData
-                    });
-                }
-            }
-        }
-
-        function applyTeacherFeedbackToCanvas(feedbackUrl) {
+      }
+    }
+
+    // Load slide artwork state from Firestore
+    function loadCurrentSlideData() {
+      const targetStudentId = inspectingStudentId || studentId;
+      if (!currentAssignmentId || !targetStudentId) return;
+
+      if (unsubSlideWork) unsubSlideWork();
+
+      unsubSlideWork = db.collection('assignments').doc(currentAssignmentId)
+        .collection('students').doc(targetStudentId)
+        .collection('slides').doc(`slide_${currentSlideIndex}`)
+        .onSnapshot(doc => {
+          redrawBackgroundAndCanvas();
+          if (doc.exists && doc.data().canvasData) {
             const img = new Image();
+            img.src = doc.data().canvasData;
             img.onload = () => {
-                studentCtx.drawImage(img, 0, 0);
+              ctx.drawImage(img, 0, 0, mainCanvas.width, mainCanvas.height);
             };
-            img.src = feedbackUrl;
-        }
+          }
+        });
+    }
 
-        async function resolveStudentHand() {
-            if (state.activeStudentId) {
-                await updateDoc(getPublicDocPath('workspaces', state.activeStudentId), {
-                    handRaised: false
-                });
-                showToast("Resolved student help request.");
-                elements.gradingModal.classList.add('hidden');
-            }
-        }
+    // Save canvas state to Firestore (debounced auto-save)
+    let saveTimeout = null;
 
-        function exitSession() {
-            state.unsubscribeListeners.forEach(unsub => unsub());
-            state.unsubscribeListeners = [];
-            state.role = null;
-            state.classCode = '';
-            elements.sessionInfo.classList.add('hidden');
-            elements.roleBadge.classList.add('hidden');
-            showSection(elements.roleSelectSection);
-        }
+    function saveCanvasToFirestore() {
+      const targetStudentId = inspectingStudentId || studentId;
+      if (!currentAssignmentId || !targetStudentId) return;
 
-        function escapeHtml(str) {
-            return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      clearTimeout(saveTimeout);
+      saveTimeout = setTimeout(() => {
+        const dataUrl = mainCanvas.toDataURL();
+        db.collection('assignments').doc(currentAssignmentId)
+          .collection('students').doc(targetStudentId)
+          .collection('slides').doc(`slide_${currentSlideIndex}`)
+          .set({
+            canvasData: dataUrl,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+      }, 300);
+    }
+
+    // ==========================================
+    // 9. DRAWING TOOLKIT & HANDLERS
+    // ==========================================
+    // Tool buttons toggle
+    const toolPen = document.getElementById('toolPen');
+    const toolEraser = document.getElementById('toolEraser');
+    const toolText = document.getElementById('toolText');
+    const colorPicker = document.getElementById('colorPicker');
+    const brushSize = document.getElementById('brushSize');
+
+    toolPen.addEventListener('click', () => setTool('pen'));
+    toolEraser.addEventListener('click', () => setTool('eraser'));
+    toolText.addEventListener('click', () => setTool('text'));
+
+    colorPicker.addEventListener('input', (e) => currentColor = e.target.value);
+    brushSize.addEventListener('input', (e) => currentLineWidth = e.target.value);
+
+    function setTool(tool) {
+      activeTool = tool;
+      [toolPen, toolEraser, toolText].forEach(btn => {
+        btn.classList.remove('bg-indigo-600', 'text-white');
+        btn.classList.add('bg-white', 'text-slate-700', 'hover:bg-slate-200');
+      });
+
+      if (tool === 'pen') {
+        toolPen.classList.add('bg-indigo-600', 'text-white');
+        toolPen.classList.remove('bg-white', 'text-slate-700');
+      } else if (tool === 'eraser') {
+        toolEraser.classList.add('bg-indigo-600', 'text-white');
+        toolEraser.classList.remove('bg-white', 'text-slate-700');
+      } else if (tool === 'text') {
+        toolText.classList.add('bg-indigo-600', 'text-white');
+        toolText.classList.remove('bg-white', 'text-slate-700');
+      }
+    }
+
+    // Clear canvas button
+    document.getElementById('clearCanvasBtn').addEventListener('click', () => {
+      redrawBackgroundAndCanvas();
+      saveCanvasToFirestore();
+    });
+
+    // Drawing Mouse / Touch Events
+    function getCanvasCoordinates(e) {
+      const rect = mainCanvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      return {
+        x: (clientX - rect.left) * (mainCanvas.width / rect.width),
+        y: (clientY - rect.top) * (mainCanvas.height / rect.height)
+      };
+    }
+
+    function startDrawing(e) {
+      const coords = getCanvasCoordinates(e);
+
+      if (activeTool === 'text') {
+        const text = prompt("Enter text overlay:");
+        if (text) {
+          ctx.font = `${currentLineWidth * 4 + 12}px Inter, sans-serif`;
+          ctx.fillStyle = currentColor;
+          ctx.fillText(text, coords.x, coords.y);
+          saveCanvasToFirestore();
         }
-    </script>
+        return;
+      }
+
+      isDrawing = true;
+      lastX = coords.x;
+      lastY = coords.y;
+    }
+
+    function draw(e) {
+      if (!isDrawing) return;
+      e.preventDefault();
+
+      const coords = getCanvasCoordinates(e);
+
+      ctx.beginPath();
+      ctx.moveTo(lastX, lastY);
+      ctx.lineTo(coords.x, coords.y);
+
+      if (activeTool === 'eraser') {
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = currentLineWidth * 4;
+      } else {
+        ctx.strokeStyle = currentColor;
+        ctx.lineWidth = currentLineWidth;
+      }
+
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+
+      lastX = coords.x;
+      lastY = coords.y;
+    }
+
+    function stopDrawing() {
+      if (isDrawing) {
+        isDrawing = false;
+        saveCanvasToFirestore();
+      }
+    }
+
+    mainCanvas.addEventListener('mousedown', startDrawing);
+    mainCanvas.addEventListener('mousemove', draw);
+    mainCanvas.addEventListener('mouseup', stopDrawing);
+    mainCanvas.addEventListener('mouseleave', stopDrawing);
+
+    mainCanvas.addEventListener('touchstart', startDrawing);
+    mainCanvas.addEventListener('touchmove', draw);
+    mainCanvas.addEventListener('touchend', stopDrawing);
+
+    // ==========================================
+    // 10. HELPER UTILITIES
+    // ==========================================
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      
+      const bgClass = type === 'error' ? 'bg-rose-600' : (type === 'success' ? 'bg-emerald-600' : 'bg-slate-800');
+      toast.className = `${bgClass} text-white px-4 py-3 rounded-lg shadow-lg text-sm font-medium flex items-center gap-2 transition-all duration-300 transform translate-y-2`;
+      
+      const icon = type === 'error' ? 'fa-circle-exclamation' : (type === 'success' ? 'fa-circle-check' : 'fa-info-circle');
+      toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${escapeHtml(message)}</span>`;
+
+      container.appendChild(toast);
+
+      setTimeout(() => toast.classList.remove('translate-y-2'), 10);
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+  </script>
 </body>
 </html>
