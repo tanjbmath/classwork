@@ -121,6 +121,10 @@
         </button>
       </div>
 
+      <div id="teacherAssignmentsPanel" class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-4">
+        <div><h3 class="text-lg font-bold text-slate-800">My Assignments</h3><p class="text-sm text-slate-500">Select an assignment to monitor work and review submissions.</p></div>
+        <div id="teacherAssignmentsList" class="grid grid-cols-1 md:grid-cols-2 gap-3"><p class="text-sm text-slate-400">Loading assignments...</p></div>
+      </div>
       <!-- Active Assignment View -->
       <div id="teacherActiveSection" class="hidden space-y-6">
         
@@ -175,9 +179,10 @@
         </div>
         <button id="historyJoinAssignmentBtn" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-lg font-semibold"><i class="fa-solid fa-plus mr-2"></i>Join assignment</button>
       </div>
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div class="bg-white p-4 rounded-xl border border-slate-200"><div class="text-sm text-slate-500">Assignments started</div><div id="historyTotalCount" class="text-2xl font-bold mt-1">0</div></div>
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white p-4 rounded-xl border border-slate-200"><div class="text-sm text-slate-500">Assignment started</div><div id="historyStartedCount" class="text-2xl font-bold mt-1">0</div></div>
         <div class="bg-white p-4 rounded-xl border border-slate-200"><div class="text-sm text-slate-500">In progress</div><div id="historyProgressCount" class="text-2xl font-bold mt-1">0</div></div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200"><div class="text-sm text-slate-500">Submitted</div><div id="historySubmittedCount" class="text-2xl font-bold mt-1">0</div></div>
         <div class="bg-white p-4 rounded-xl border border-slate-200"><div class="text-sm text-slate-500">Completed</div><div id="historyCompletedCount" class="text-2xl font-bold mt-1">0</div></div>
       </div>
       <div id="studentHistoryList" class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -218,6 +223,7 @@
             <h3 id="workspaceTitle" class="font-bold text-slate-800 text-lg">Slide Workspace</h3>
             <p id="workspaceSubtext" class="text-xs text-slate-500">Stylus & Touch enabled • Auto-saves live</p>
           </div>
+          <button id="submitAssignmentBtn" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">Submit assignment</button>
         </div>
 
         <!-- Slide Navigation -->
@@ -309,6 +315,13 @@
           <textarea id="assignDescInput" rows="2" placeholder="Instructions for students..." class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"></textarea>
         </div>
 
+        <div class="space-y-2">
+          <label class="block text-sm font-semibold text-slate-700 mb-1">Class / Group Label (optional)</label>
+          <input type="text" id="assignClassLabelInput" placeholder="e.g. Foundation Mathematics Tutorial 1" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          <label class="block text-sm font-semibold text-slate-700 mb-1">Assigned Student Email(s)</label>
+          <textarea id="assignStudentEmailsInput" required rows="4" placeholder="student1@gmail.com&#10;student2@gmail.com&#10;Paste one email per line, or separate emails with commas." class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"></textarea>
+          <p class="text-xs text-slate-500">Enter individual student emails or paste the email list for an entire class. Students see the assignment before joining.</p>
+        </div>
         <div class="space-y-4">
           <div class="flex justify-between items-center">
             <h4 class="text-sm font-bold text-slate-800 uppercase tracking-wider">Assignment Slides</h4>
@@ -353,6 +366,15 @@
     let signedInUser = null;
     let accountRole = 'student';
     let historyUnsubscribe = null;
+    let assignedHistoryUnsubscribe = null;
+    let teacherAssignmentsUnsubscribe = null;
+    let studentAssignedRecords = [];
+    let studentSubmissionRecords = [];
+    let currentAssignedStudents = [];
+    let currentJoinedStudents = [];
+    let currentSubmissionStatus = 'in-progress';
+    let currentAssignedStudentKey = null;
+    let unsubAssignedStudents = null;
     const googleProvider = new firebase.auth.GoogleAuthProvider();
 
     try {
@@ -537,6 +559,7 @@
         roleBadge.textContent = "Teacher Mode";
         roleBadge.className = "bg-indigo-800 text-indigo-100 px-3 py-1 rounded-full font-medium shadow-inner";
         teacherDashboard.classList.remove('hidden');
+        renderTeacherAssignments();
       } else {
         roleBadge.textContent = "Student Mode";
         roleBadge.className = "bg-emerald-800 text-emerald-100 px-3 py-1 rounded-full font-medium shadow-inner";
@@ -549,12 +572,18 @@
     function resetRole() {
       if (unsubAssignment) unsubAssignment();
       if (unsubStudents) unsubStudents();
+      if (unsubAssignedStudents) unsubAssignedStudents();
       if (unsubSlideWork) unsubSlideWork();
+      if (teacherAssignmentsUnsubscribe) { teacherAssignmentsUnsubscribe(); teacherAssignmentsUnsubscribe = null; }
 
       currentUserRole = null;
       currentAssignmentId = null;
       currentAssignmentData = null;
       inspectingStudentId = null;
+      currentAssignedStudents = [];
+      currentJoinedStudents = [];
+      currentAssignedStudentKey = null;
+      currentSubmissionStatus = 'in-progress';
 
       teacherDashboard.classList.add('hidden');
       studentJoinScreen.classList.add('hidden');
@@ -651,6 +680,16 @@
       
       const title = document.getElementById('assignTitleInput').value.trim();
       const desc = document.getElementById('assignDescInput').value.trim();
+      const classLabel = document.getElementById('assignClassLabelInput').value.trim();
+      const studentEmails = [...new Set(document.getElementById('assignStudentEmailsInput').value
+        .split(/[\n,;]+/)
+        .map(email => email.trim().toLowerCase())
+        .filter(Boolean))];
+      const invalidEmails = studentEmails.filter(email => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
+      if (!studentEmails.length || invalidEmails.length) {
+        showToast('Enter at least one valid student email address. For a class, paste the class email list.', 'error');
+        return;
+      }
 
       if (!title) {
         showToast("Please enter an assignment title", "error");
@@ -689,7 +728,9 @@
         sessionCode: code,
         slides: slides,
         createdAt: new Date().toISOString(),
-        status: 'published'
+        status: 'published',
+        classLabel,
+        assignedEmails: studentEmails
       };
 
       let docId = "assign_" + code;
@@ -713,6 +754,18 @@
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
+        const assignedBatch = db.batch();
+        studentEmails.forEach(email => {
+          const assignedRef = db.collection('assignments').doc(docId).collection('assignedStudents').doc(studentKeyForEmail(email));
+          assignedBatch.set(assignedRef, {
+            assignmentId: docId, studentEmail: email, teacherId: signedInUser.uid,
+            title, description: desc, sessionCode: code, classLabel,
+            status: 'assignment-started',
+            assignedAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+        });
+        await assignedBatch.commit();
+
         currentAssignmentId = docId;
         currentSessionCode = code;
         currentAssignmentData = newAssignment;
@@ -720,7 +773,8 @@
 
         createAssignmentModal.classList.add('hidden');
         createAssignmentForm.reset();
-        showToast(`Published! Session Code: ${code}`, "success");
+        showToast(`Published! Session Code: ${code} • Assigned to ${studentEmails.length} student(s)`, "success");
+        renderTeacherAssignments();
         loadTeacherAssignmentView(docId);
       } catch (err) {
         console.error("Assignment publish failed:", err);
@@ -766,14 +820,91 @@
 
         if (unsubStudents) unsubStudents();
         unsubStudents = db.collection('assignments').doc(assignmentId).collection('students').onSnapshot(snapshot => {
-          renderStudentGrid(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+          currentJoinedStudents = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+          renderTeacherRoster();
         }, err => {
           console.warn("Student listener notice:", err);
-          renderStudentGrid([]);
+          currentJoinedStudents = [];
+          renderTeacherRoster();
+        });
+        if (unsubAssignedStudents) unsubAssignedStudents();
+        unsubAssignedStudents = db.collection('assignments').doc(assignmentId).collection('assignedStudents').onSnapshot(snapshot => {
+          currentAssignedStudents = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+          renderTeacherRoster();
+        }, err => {
+          console.warn("Assigned-student listener notice:", err);
+          currentAssignedStudents = [];
+          renderTeacherRoster();
         });
       } else {
+        currentJoinedStudents = [];
+        currentAssignedStudents = [];
         renderStudentGrid([]);
       }
+    }
+
+    function renderTeacherAssignments() {
+      if (!signedInUser || !db || accountRole !== 'teacher') return;
+      if (teacherAssignmentsUnsubscribe) teacherAssignmentsUnsubscribe();
+      const list = document.getElementById('teacherAssignmentsList');
+      list.innerHTML = '<p class="text-sm text-slate-400">Loading assignments...</p>';
+      teacherAssignmentsUnsubscribe = db.collection('assignments').where('teacherId', '==', signedInUser.uid)
+        .onSnapshot(snapshot => {
+          const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          docs.sort((a, b) => {
+            const at = a.createdAt && a.createdAt.toDate ? a.createdAt.toDate().getTime() : 0;
+            const bt = b.createdAt && b.createdAt.toDate ? b.createdAt.toDate().getTime() : 0;
+            return bt - at;
+          });
+          list.innerHTML = '';
+          if (!docs.length) {
+            list.innerHTML = '<p class="text-sm text-slate-400">No assignments yet. Create one to get started.</p>';
+            return;
+          }
+          docs.forEach(item => {
+            const card = document.createElement('button');
+            card.type = 'button';
+            card.className = 'text-left p-4 border border-slate-200 rounded-xl hover:border-indigo-400 hover:bg-indigo-50 transition';
+            const title = document.createElement('div');
+            title.className = 'font-semibold text-slate-800';
+            title.textContent = item.title || 'Untitled assignment';
+            const meta = document.createElement('div');
+            meta.className = 'text-xs text-slate-500 mt-1';
+            meta.textContent = 'Code: ' + (item.sessionCode || '—') + ' • ' + ((item.assignedEmails || []).length || 0) + ' assigned';
+            card.append(title, meta);
+            card.addEventListener('click', () => {
+              currentAssignmentId = item.id; currentAssignmentData = item; currentSessionCode = item.sessionCode || '';
+              loadTeacherAssignmentView(item.id);
+            });
+            list.appendChild(card);
+          });
+        }, err => {
+          console.error('Teacher assignments load failed:', err);
+          list.innerHTML = '<p class="text-sm text-rose-600">Could not load assignments: ' + escapeHtml(err.message) + '</p>';
+        });
+    }
+
+    function renderTeacherRoster() {
+      const joinedByEmail = new Map();
+      currentJoinedStudents.forEach(student => { if (student.email) joinedByEmail.set(student.email.trim().toLowerCase(), student); });
+      const roster = [];
+      const assignedEmails = new Set();
+      currentAssignedStudents.forEach(assigned => {
+        const email = (assigned.studentEmail || '').toLowerCase();
+        const joined = joinedByEmail.get(email);
+        assignedEmails.add(email);
+        roster.push({ ...assigned, ...joined, id: joined ? joined.id : assigned.id, studentUid: joined ? joined.id : null,
+          studentEmail: email, assignedStudentKey: assigned.id, status: assigned.status || (joined ? 'in-progress' : 'assignment-started'), isJoined: Boolean(joined) });
+      });
+      currentJoinedStudents.forEach(student => {
+        const email = (student.email || '').toLowerCase();
+        if (!email || !assignedEmails.has(email)) roster.push({ ...student, studentUid: student.id, isJoined: true, status: 'in-progress' });
+      });
+      renderStudentGrid(roster);
+    }
+
+    function studentKeyForEmail(email) {
+      return String(email || '').trim().toLowerCase().replace(/\//g, '_');
     }
 
     function renderStudentGrid(studentsList) {
@@ -795,40 +926,55 @@
       grid.innerHTML = '';
       studentsList.forEach(student => {
         const card = document.createElement('div');
-        card.className = "bg-slate-50 border border-slate-200 hover:border-indigo-400 p-4 rounded-xl shadow-sm transition hover:shadow-md flex flex-col justify-between cursor-pointer group";
-        
+        card.className = "bg-slate-50 border border-slate-200 hover:border-indigo-400 p-4 rounded-xl shadow-sm transition flex flex-col gap-3";
+        const displayName = student.name || student.studentEmail || 'Assigned student';
+        const labels = { 'assignment-started': 'Assignment Started', 'in-progress': 'In Progress', 'submitted': 'Submitted', 'completed': 'Completed' };
         card.innerHTML = `
-          <div class="flex justify-between items-start mb-3">
-            <div>
-              <h5 class="font-bold text-slate-800 group-hover:text-indigo-600 transition">${escapeHtml(student.name)}</h5>
-              <span class="text-xs text-slate-400">Active</span>
-            </div>
-            <span class="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded font-semibold">
-              ${currentAssignmentData?.slides?.length || 1} Slides
-            </span>
-          </div>
+          <div class="flex justify-between items-start gap-2"><div class="min-w-0">
+            <h5 class="font-bold text-slate-800 break-words">${escapeHtml(displayName)}</h5>
+            <p class="text-xs text-slate-500 break-all">${escapeHtml(student.studentEmail || student.email || '')}</p>
+            <span class="inline-block mt-1 text-xs rounded-full px-2 py-1 bg-indigo-50 text-indigo-700">${labels[student.status] || 'In Progress'}</span>
+          </div><span class="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded font-semibold whitespace-nowrap">${currentAssignmentData?.slides?.length || 1} Slides</span></div>
           <div class="h-32 bg-white border border-slate-200 rounded flex items-center justify-center overflow-hidden relative">
-            <img id="thumb-${student.id}" class="w-full h-full object-contain" src="" alt="Live Preview">
-            <div class="absolute inset-0 bg-indigo-900/10 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-              <span class="bg-indigo-600 text-white text-xs px-3 py-1.5 rounded-lg shadow font-medium">Inspect & Annotate</span>
-            </div>
+            ${student.isJoined ? `<img id="thumb-${student.id}" class="w-full h-full object-contain" src="" alt="Live Preview">` : '<span class="text-xs text-slate-400">Not joined yet</span>'}
           </div>
-        `;
-
-        card.addEventListener('click', () => openWorkspaceForInspection(student.id, student.name));
-        grid.appendChild(card);
-
-        if (db) {
-          db.collection('assignments').doc(currentAssignmentId)
-            .collection('students').doc(student.id)
+          <div class="flex flex-wrap gap-2">
+            ${student.isJoined ? '<button type="button" class="inspect-student-btn flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-2 rounded-lg font-semibold">View work</button>' : ''}
+            ${student.status === 'submitted' ? '<button type="button" class="mark-completed-btn bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-lg font-semibold">Completed</button><button type="button" class="amendments-btn bg-amber-500 hover:bg-amber-600 text-white text-xs px-3 py-2 rounded-lg font-semibold">Amendments Needed</button>' : ''}
+          </div>`;
+        const inspect = card.querySelector('.inspect-student-btn');
+        if (inspect) inspect.addEventListener('click', e => { e.stopPropagation(); openWorkspaceForInspection(student.studentUid || student.id, displayName); });
+        const completed = card.querySelector('.mark-completed-btn');
+        if (completed) completed.addEventListener('click', e => { e.stopPropagation(); setStudentReviewStatus(student, 'completed'); });
+        const amendments = card.querySelector('.amendments-btn');
+        if (amendments) amendments.addEventListener('click', e => { e.stopPropagation(); setStudentReviewStatus(student, 'in-progress'); });
+        if (student.isJoined && db) {
+          db.collection('assignments').doc(currentAssignmentId).collection('students').doc(student.studentUid || student.id)
             .collection('slides').doc('slide_0').onSnapshot(slideDoc => {
-              const imgEl = document.getElementById(`thumb-${student.id}`);
-              if (imgEl && slideDoc.exists && slideDoc.data().canvasData) {
-                imgEl.src = slideDoc.data().canvasData;
-              }
-            });
+              const img = document.getElementById(`thumb-${student.id}`);
+              if (img && slideDoc.exists && slideDoc.data().canvasData) img.src = slideDoc.data().canvasData;
+            }, err => console.warn('Student preview listener:', err));
         }
+        grid.appendChild(card);
       });
+    }
+
+    async function setStudentReviewStatus(student, status) {
+      if (!currentAssignmentId || !signedInUser) return;
+      try {
+        const update = { status, reviewedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          reviewOutcome: status === 'completed' ? 'completed' : 'amendments-needed' };
+        if (student.assignedStudentKey) {
+          await db.collection('assignments').doc(currentAssignmentId).collection('assignedStudents').doc(student.assignedStudentKey).update(update);
+        }
+        if (student.studentUid) {
+          await db.collection('users').doc(student.studentUid).collection('submissions').doc(currentAssignmentId).set(update, { merge: true });
+        }
+        showToast(status === 'completed' ? 'Work marked completed.' : 'Amendments requested. Student can continue editing.', 'success');
+      } catch (err) {
+        console.error('Could not update review status:', err);
+        showToast('Could not update review status: ' + err.message, 'error');
+      }
     }
 
     function openWorkspaceForInspection(stId, stName) {
@@ -903,16 +1049,25 @@
         if (!assignmentDoc.exists) throw new Error('The assignment is no longer available.');
         matchedData = assignmentDoc.data();
 
-        await db.collection('users').doc(studentId).collection('submissions').doc(matchedDocId).set({
-          assignmentId: matchedDocId,
-          title: matchedData.title || lookup.title || 'Assignment',
-          description: matchedData.description || '',
-          sessionCode: inputCode,
-          status: 'in-progress',
-          startedAt: now,
-          lastWorkedAt: now,
-          slideCount: (matchedData.slides || []).length
-        }, { merge: true });
+        const assignedStudentRef = db.collection('assignments').doc(matchedDocId).collection('assignedStudents').doc(studentKeyForEmail(signedInUser.email));
+        const assignedStudentDoc = await assignedStudentRef.get();
+        const assignedStatus = assignedStudentDoc.exists ? (assignedStudentDoc.data().status || 'assignment-started') : 'in-progress';
+        currentAssignedStudentKey = assignedStudentDoc.exists ? studentKeyForEmail(signedInUser.email) : null;
+        currentSubmissionStatus = assignedStatus === 'assignment-started' ? 'in-progress' : assignedStatus;
+        if (assignedStudentDoc.exists && assignedStatus === 'assignment-started') {
+          await assignedStudentRef.update({ status: 'in-progress', startedAt: now, lastWorkedAt: now });
+        }
+        const submissionRef = db.collection('users').doc(studentId).collection('submissions').doc(matchedDocId);
+        const existingSubmission = await submissionRef.get();
+        if (!existingSubmission.exists) {
+          await submissionRef.set({ assignmentId: matchedDocId, title: matchedData.title || lookup.title || 'Assignment',
+            description: matchedData.description || '', sessionCode: inputCode, status: currentSubmissionStatus,
+            startedAt: now, lastWorkedAt: now, slideCount: (matchedData.slides || []).length });
+        } else if (currentSubmissionStatus !== 'completed') {
+          await submissionRef.set({ assignmentId: matchedDocId, title: matchedData.title || lookup.title || 'Assignment',
+            description: matchedData.description || '', sessionCode: inputCode, status: currentSubmissionStatus,
+            lastWorkedAt: now, slideCount: (matchedData.slides || []).length }, { merge: true });
+        }
       } catch (err) {
         console.error('Could not join assignment:', err);
         showToast('Could not join assignment: ' + err.message, 'error');
@@ -924,6 +1079,7 @@
       currentAssignmentData = matchedData;
       currentAssignmentId = matchedDocId;
       currentSessionCode = inputCode;
+      updateSubmitAssignmentButton();
 
       studentJoinScreen.classList.add('hidden');
       studentHistoryScreen.classList.add('hidden');
@@ -941,43 +1097,120 @@
     });
 
     // ==========================================
-    // STUDENT HISTORY / REOPEN SAVED WORK
+    // STUDENT HISTORY / ASSIGNMENT STATUS
     // ==========================================
     function renderStudentHistory() {
       if (!signedInUser || !db) return;
       if (historyUnsubscribe) historyUnsubscribe();
+      if (assignedHistoryUnsubscribe) assignedHistoryUnsubscribe();
       const list = document.getElementById('studentHistoryList');
-      list.innerHTML = '<div class="col-span-full text-center py-8 text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading saved work...</div>';
-      historyUnsubscribe = db.collection('users').doc(signedInUser.uid).collection('submissions')
-        .orderBy('lastWorkedAt', 'desc')
-        .onSnapshot(snapshot => {
-          const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          document.getElementById('historyTotalCount').textContent = items.length;
-          document.getElementById('historyProgressCount').textContent = items.filter(x => x.status !== 'completed').length;
-          document.getElementById('historyCompletedCount').textContent = items.filter(x => x.status === 'completed').length;
-          if (!items.length) {
-            list.innerHTML = '<div class="col-span-full text-center py-12 text-slate-400 bg-white rounded-xl border border-slate-200"><i class="fa-solid fa-folder-open text-3xl mb-3"></i><p>No saved assignments yet. Join an assignment using your teacher’s code.</p></div>';
-            return;
-          }
-          list.innerHTML = '';
-          items.forEach(item => {
-            const card = document.createElement('article');
-            card.className = 'bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col gap-3';
-            const date = item.lastWorkedAt && item.lastWorkedAt.toDate ? item.lastWorkedAt.toDate().toLocaleString() : 'Recently';
-            const status = item.status === 'completed' ? 'Completed' : 'In progress';
-            card.innerHTML = '<div class="flex items-start justify-between gap-3"><div class="min-w-0"><h3 class="font-bold text-slate-800 break-words"></h3><p class="text-sm text-slate-500 mt-1"></p></div><span class="text-xs rounded-full px-2 py-1 bg-emerald-50 text-emerald-700 whitespace-nowrap"></span></div><div class="text-xs text-slate-400"></div><button class="reopen-work-btn w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg py-2.5 font-semibold"><i class="fa-solid fa-rotate-right mr-2"></i>Reopen work</button>';
-            card.querySelector('h3').textContent = item.title || 'Untitled assignment';
-            card.querySelector('p').textContent = (item.slideCount || 1) + ' slides';
-            card.querySelector('span').textContent = status;
-            card.querySelector('.text-xs.text-slate-400').textContent = 'Last worked: ' + date;
-            card.querySelector('button').addEventListener('click', () => reopenSavedAssignment(item.id, item));
-            list.appendChild(card);
+      list.innerHTML = '<div class="col-span-full text-center py-8 text-slate-400">Loading assignments...</div>';
+      studentAssignedRecords = [];
+      studentSubmissionRecords = [];
+      historyUnsubscribe = db.collection('users').doc(signedInUser.uid).collection('submissions').onSnapshot(snapshot => {
+        studentSubmissionRecords = snapshot.docs.map(doc => ({ id: doc.id, assignmentId: doc.id, ...doc.data() }));
+        renderCombinedStudentHistory();
+      }, err => {
+        console.error('History load failed:', err);
+        list.innerHTML = '<div class="col-span-full text-center py-8 text-rose-600">Could not load saved work: ' + escapeHtml(err.message) + '</div>';
+      });
+      if (signedInUser.email) {
+        assignedHistoryUnsubscribe = db.collectionGroup('assignedStudents').where('studentEmail', '==', signedInUser.email.trim().toLowerCase())
+          .onSnapshot(snapshot => {
+            studentAssignedRecords = snapshot.docs.map(doc => ({ id: doc.id, assignedStudentKey: doc.id,
+              assignmentId: doc.data().assignmentId || (doc.ref.parent.parent && doc.ref.parent.parent.id), ...doc.data() }));
+            renderCombinedStudentHistory();
+          }, err => {
+            console.error('Assigned assignments load failed:', err);
+            showToast('Could not load assigned work: ' + err.message, 'error');
           });
-        }, err => {
-          console.error('History load failed:', err);
-          list.innerHTML = '<div class="col-span-full text-center py-8 text-rose-600">Could not load history. Check Firestore rules and required indexes.</div>';
-        });
+      }
     }
+
+    function renderCombinedStudentHistory() {
+      const list = document.getElementById('studentHistoryList');
+      const byAssignment = new Map();
+      studentSubmissionRecords.forEach(item => byAssignment.set(item.assignmentId || item.id, { ...item, assignmentId: item.assignmentId || item.id }));
+      studentAssignedRecords.forEach(item => {
+        if (!item.assignmentId) return;
+        const prior = byAssignment.get(item.assignmentId) || {};
+        byAssignment.set(item.assignmentId, { ...prior, ...item, id: item.assignmentId, assignmentId: item.assignmentId,
+          status: item.status || prior.status || 'assignment-started', assignedStudentKey: item.assignedStudentKey || item.id, source: 'assigned' });
+      });
+      const items = [...byAssignment.values()];
+      items.sort((a,b) => {
+        const date = x => x.lastWorkedAt?.toDate ? x.lastWorkedAt.toDate().getTime() : (x.assignedAt?.toDate ? x.assignedAt.toDate().getTime() : 0);
+        return date(b) - date(a);
+      });
+      document.getElementById('historyStartedCount').textContent = items.filter(x => x.status === 'assignment-started').length;
+      document.getElementById('historyProgressCount').textContent = items.filter(x => x.status === 'in-progress').length;
+      document.getElementById('historySubmittedCount').textContent = items.filter(x => x.status === 'submitted').length;
+      document.getElementById('historyCompletedCount').textContent = items.filter(x => x.status === 'completed').length;
+      if (!items.length) {
+        list.innerHTML = '<div class="col-span-full text-center py-12 text-slate-400 bg-white rounded-xl border border-slate-200"><i class="fa-solid fa-folder-open text-3xl mb-3"></i><p>No assignments assigned yet. Ask your teacher to assign work to your Google email.</p></div>';
+        return;
+      }
+      list.innerHTML = '';
+      const labels = { 'assignment-started':'Assignment Started', 'in-progress':'In Progress', 'submitted':'Submitted', 'completed':'Completed' };
+      items.forEach(item => {
+        const card = document.createElement('article');
+        card.className = 'bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col gap-3';
+        const dateValue = item.lastWorkedAt || item.assignedAt;
+        const date = dateValue && dateValue.toDate ? dateValue.toDate().toLocaleString() : 'Recently assigned';
+        const status = item.status || 'in-progress';
+        const buttonLabel = status === 'assignment-started' ? 'Start assignment' : status === 'submitted' ? 'View submitted work' : status === 'completed' ? 'View completed work' : 'Continue work';
+        card.innerHTML = '<div class="flex items-start justify-between gap-3"><div class="min-w-0"><h3 class="font-bold text-slate-800 break-words"></h3><p class="text-sm text-slate-500 mt-1"></p></div><span class="text-xs rounded-full px-2 py-1 bg-slate-100 text-slate-700 whitespace-nowrap"></span></div><div class="text-xs text-slate-400"></div><button class="reopen-work-btn w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg py-2.5 font-semibold"></button>';
+        card.querySelector('h3').textContent = item.title || 'Untitled assignment';
+        card.querySelector('p').textContent = (item.slideCount || 1) + ' slides' + (item.classLabel ? ' • ' + item.classLabel : '');
+        card.querySelector('span').textContent = labels[status] || 'In Progress';
+        card.querySelector('.text-xs.text-slate-400').textContent = 'Last updated: ' + date;
+        card.querySelector('button').textContent = buttonLabel;
+        card.querySelector('button').addEventListener('click', () => status === 'assignment-started' ? startAssignedAssignment(item) : reopenSavedAssignment(item.assignmentId || item.id, item));
+        list.appendChild(card);
+      });
+    }
+
+    function startAssignedAssignment(item) {
+      if (!item.sessionCode) return showToast('This assignment has no session code. Ask your teacher for help.', 'error');
+      document.getElementById('joinCodeInput').value = item.sessionCode;
+      document.getElementById('studentNameInput').value = signedInUser.displayName || (signedInUser.email || 'Student').split('@')[0];
+      studentHistoryScreen.classList.add('hidden');
+      studentJoinScreen.classList.remove('hidden');
+      document.getElementById('studentJoinForm').requestSubmit();
+    }
+
+    function updateSubmitAssignmentButton() {
+      const button = document.getElementById('submitAssignmentBtn');
+      if (!button) return;
+      const isStudent = currentUserRole === 'student' && !inspectingStudentId;
+      button.classList.toggle('hidden', !isStudent || currentSubmissionStatus !== 'in-progress');
+      button.disabled = false;
+      button.textContent = 'Submit assignment';
+    }
+
+    document.getElementById('submitAssignmentBtn').addEventListener('click', async () => {
+      if (!signedInUser || !currentAssignmentId || currentSubmissionStatus !== 'in-progress') return;
+      const button = document.getElementById('submitAssignmentBtn');
+      button.disabled = true;
+      try {
+        const now = firebase.firestore.FieldValue.serverTimestamp();
+        await db.collection('users').doc(signedInUser.uid).collection('submissions').doc(currentAssignmentId).set({
+          assignmentId: currentAssignmentId, title: currentAssignmentData?.title || 'Assignment',
+          status: 'submitted', submittedAt: now, lastWorkedAt: now
+        }, { merge: true });
+        if (currentAssignedStudentKey) {
+          await db.collection('assignments').doc(currentAssignmentId).collection('assignedStudents').doc(currentAssignedStudentKey)
+            .update({ status: 'submitted', submittedAt: now, lastWorkedAt: now });
+        }
+        currentSubmissionStatus = 'submitted';
+        updateSubmitAssignmentButton();
+        renderCombinedStudentHistory();
+        showToast('Assignment submitted to your teacher for review.', 'success');
+      } catch (err) {
+        console.error('Assignment submission failed:', err);
+        showToast('Could not submit assignment: ' + err.message, 'error');
+      } finally { button.disabled = false; }
+    });
 
     async function reopenSavedAssignment(assignmentId, submission) {
       if (!signedInUser) return showToast('Sign in first.', 'error');
@@ -993,6 +1226,8 @@
         studentId = signedInUser.uid;
         studentName = signedInUser.displayName || 'Student';
         inspectingStudentId = null;
+        currentSubmissionStatus = submission.status || 'in-progress';
+        currentAssignedStudentKey = submission.assignedStudentKey || null;
         currentUserRole = 'student';
         studentHistoryScreen.classList.add('hidden');
         studentJoinScreen.classList.add('hidden');
@@ -1001,7 +1236,10 @@
         document.getElementById('exitWorkspaceBtn').classList.remove('hidden');
         document.getElementById('exitWorkspaceBtn').textContent = 'Back to My Work';
         document.getElementById('workspaceTitle').textContent = currentAssignmentData.title || 'Assignment';
-        document.getElementById('workspaceSubtext').textContent = 'Your saved work • Auto-saves to your account';
+        document.getElementById('workspaceSubtext').textContent = currentSubmissionStatus === 'submitted'
+          ? 'Submitted for teacher review • Read-only'
+          : currentSubmissionStatus === 'completed' ? 'Completed • Read-only' : 'Your saved work • Auto-saves to your account';
+        updateSubmitAssignmentButton();
         currentSlideIndex = 0;
         setupSlideWorkspace();
       } catch (err) {
@@ -1144,7 +1382,7 @@
           showToast('Teacher inspection is read-only in this version.', 'info');
           return;
         }
-        if (db && signedInUser && targetStudentId === signedInUser.uid) {
+        if (db && signedInUser && targetStudentId === signedInUser.uid && currentSubmissionStatus === 'in-progress') {
           try {
             const now = firebase.firestore.FieldValue.serverTimestamp();
             await db.collection('assignments').doc(currentAssignmentId)
@@ -1248,6 +1486,10 @@
 
     // Advanced Pointer Events for Stylus / Apple Pencil + Palm Rejection Toggle
     function handlePointerDown(e) {
+      if (currentUserRole === 'student' && currentSubmissionStatus !== 'in-progress') {
+        showToast('This assignment is read-only until your teacher requests amendments.', 'info');
+        return;
+      }
       // In Stylus Only mode, filter out touch/finger input to reject palm contact completely
       if (isStylusOnlyMode && e.pointerType === 'touch') {
         return;
