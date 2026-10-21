@@ -1,0 +1,199 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isTeacher() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher';
+    }
+
+    function ownsAssignment(assignmentId) {
+      return isTeacher()
+        && exists(/databases/$(database)/documents/assignments/$(assignmentId))
+        && get(/databases/$(database)/documents/assignments/$(assignmentId)).data.teacherId == request.auth.uid;
+    }
+
+    function isAssignmentMember(assignmentId, studentUid) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/assignments/$(assignmentId)/students/$(studentUid));
+    }
+
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasOnly([
+          'displayName', 'email', 'photoURL', 'lastSignInAt'
+        ]);
+
+      allow update: if isOwner(uid)
+        && (
+          ('role' in resource.data
+            && 'role' in request.resource.data
+            && request.resource.data.role == resource.data.role)
+          || (!('role' in resource.data) && !('role' in request.resource.data))
+        )
+        && request.resource.data.keys().hasOnly([
+          'displayName', 'email', 'photoURL', 'lastSignInAt', 'role'
+        ]);
+
+      allow delete: if false;
+
+      match /submissions/{assignmentId} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid)
+          && request.resource.data.assignmentId == assignmentId
+          && request.resource.data.status in ['in-progress', 'submitted']
+          && isAssignmentMember(assignmentId, uid);
+        allow update: if (
+            isOwner(uid)
+            && request.resource.data.assignmentId == assignmentId
+            && isAssignmentMember(assignmentId, uid)
+            && resource.data.status != 'completed'
+            && request.resource.data.status in ['in-progress', 'submitted']
+            && (resource.data.status != 'submitted' || request.resource.data.status == 'submitted')
+          ) || (
+            ownsAssignment(assignmentId)
+            && request.resource.data.assignmentId == assignmentId
+            && request.resource.data.status in ['completed', 'in-progress']
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reviewedAt', 'reviewOutcome'])
+          );
+        allow delete: if false;
+      }
+    }
+
+    // Collection-group reads are limited to the signed-in student's own email.
+    match /{path=**}/assignedStudents/{studentKey} {
+      allow read: if signedIn() && resource.data.studentEmail == request.auth.token.email;
+    }
+
+    // A known session code can resolve to a limited lookup record; codes cannot be listed.
+    match /assignmentLookups/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+
+      allow create: if isTeacher()
+        && request.resource.data.sessionCode == code
+        && request.resource.data.keys().hasOnly([
+          'assignmentId', 'sessionCode', 'teacherId', 'title', 'status', 'createdAt'
+        ])
+        && request.resource.data.teacherId == request.auth.uid
+        && exists(/databases/$(database)/documents/assignments/$(request.resource.data.assignmentId))
+        && get(/databases/$(database)/documents/assignments/$(request.resource.data.assignmentId)).data.teacherId == request.auth.uid
+        && get(/databases/$(database)/documents/assignments/$(request.resource.data.assignmentId)).data.sessionCode == code;
+
+      allow update: if isTeacher()
+        && resource.data.teacherId == request.auth.uid
+        && ownsAssignment(resource.data.assignmentId)
+        && request.resource.data.sessionCode == code
+        && request.resource.data.assignmentId == resource.data.assignmentId
+        && request.resource.data.teacherId == resource.data.teacherId
+        && request.resource.data.keys().hasOnly([
+          'assignmentId', 'sessionCode', 'teacherId', 'title', 'status', 'createdAt'
+        ]);
+
+      allow delete: if isTeacher()
+        && resource.data.teacherId == request.auth.uid
+        && ownsAssignment(resource.data.assignmentId);
+    }
+
+    match /assignments/{assignmentId} {
+      allow read: if (isTeacher() && resource.data.teacherId == request.auth.uid)
+        || (signedIn() && isAssignmentMember(assignmentId, request.auth.uid));
+
+      allow create: if isTeacher()
+        && request.resource.data.teacherId == request.auth.uid
+        && request.resource.data.sessionCode is string
+        && request.resource.data.assignedStudentCount is int
+        && request.resource.data.assignedStudentCount > 0;
+
+      allow update: if ownsAssignment(assignmentId)
+        && request.resource.data.teacherId == resource.data.teacherId
+        && request.resource.data.sessionCode == resource.data.sessionCode;
+
+      allow delete: if ownsAssignment(assignmentId);
+
+      match /assignedStudents/{studentKey} {
+        allow get: if ownsAssignment(assignmentId)
+          || (signedIn() && studentKey == request.auth.token.email);
+        allow list: if ownsAssignment(assignmentId)
+          || (signedIn() && resource.data.studentEmail == request.auth.token.email);
+
+        allow create: if ownsAssignment(assignmentId)
+          && request.resource.data.assignmentId == assignmentId
+          && request.resource.data.teacherId == request.auth.uid
+          && request.resource.data.studentEmail is string
+          && request.resource.data.status == 'assignment-started'
+          && request.resource.data.keys().hasOnly([
+            'assignmentId', 'studentEmail', 'teacherId', 'title', 'description',
+            'sessionCode', 'classLabel', 'slideCount', 'status', 'assignedAt'
+          ]);
+
+        allow update: if (
+            ownsAssignment(assignmentId)
+            && request.resource.data.assignmentId == resource.data.assignmentId
+            && request.resource.data.studentEmail == resource.data.studentEmail
+            && request.resource.data.teacherId == resource.data.teacherId
+            && request.resource.data.status in ['completed', 'in-progress']
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reviewedAt', 'reviewOutcome'])
+          ) || (
+            signedIn()
+            && resource.data.studentEmail == request.auth.token.email
+            && request.resource.data.studentEmail == resource.data.studentEmail
+            && request.resource.data.assignmentId == resource.data.assignmentId
+            && request.resource.data.teacherId == resource.data.teacherId
+            && request.resource.data.status in ['in-progress', 'submitted']
+            && (
+              (resource.data.status == 'assignment-started' && request.resource.data.status == 'in-progress')
+              || (resource.data.status == 'in-progress' && request.resource.data.status in ['in-progress', 'submitted'])
+            )
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'startedAt', 'lastWorkedAt', 'submittedAt'])
+          );
+
+        allow delete: if ownsAssignment(assignmentId);
+      }
+
+      match /students/{studentUid} {
+        allow read: if isOwner(studentUid) || ownsAssignment(assignmentId);
+
+        allow create: if isOwner(studentUid)
+          && request.resource.data.uid == studentUid
+          && request.resource.data.sessionCode is string
+          && exists(/databases/$(database)/documents/assignmentLookups/$(request.resource.data.sessionCode))
+          && get(/databases/$(database)/documents/assignmentLookups/$(request.resource.data.sessionCode)).data.assignmentId == assignmentId
+          && exists(/databases/$(database)/documents/assignments/$(assignmentId))
+          && (
+            (
+              exists(/databases/$(database)/documents/assignments/$(assignmentId)/assignedStudents/$(request.auth.token.email))
+              && get(/databases/$(database)/documents/assignments/$(assignmentId)/assignedStudents/$(request.auth.token.email)).data.studentEmail == request.auth.token.email
+            )
+            || ownsAssignment(assignmentId)
+          );
+
+        allow update: if (
+            isOwner(studentUid)
+            && request.resource.data.uid == resource.data.uid
+            && request.resource.data.sessionCode == resource.data.sessionCode
+          ) || ownsAssignment(assignmentId);
+
+        allow delete: if ownsAssignment(assignmentId);
+
+        match /slides/{slideId} {
+          allow read: if isOwner(studentUid) || ownsAssignment(assignmentId);
+          allow create, update: if (
+              isOwner(studentUid) && isAssignmentMember(assignmentId, studentUid)
+            ) || ownsAssignment(assignmentId);
+          allow delete: if ownsAssignment(assignmentId);
+        }
+      }
+    }
+  }
+}
