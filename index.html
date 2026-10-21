@@ -1576,6 +1576,12 @@
         ctx.fillRect(0, bandTop, mainCanvas.width, bandHeight);
         ctx.restore();
         saveCanvasToFirestore();
+
+        // Treat line erasing as a one-shot action so the next pointer gesture can write.
+        lineEraserMode = false;
+        lineEraserToggleBtn.setAttribute('aria-pressed', 'false');
+        lineEraserToggleBtn.classList.remove('bg-amber-100', 'border-amber-400', 'text-amber-800');
+        lineEraserToggleBtn.innerHTML = '<i class="fa-solid fa-grip-lines"></i> Line Eraser: Off';
         return;
       }
 
