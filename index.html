@@ -836,6 +836,10 @@
       }
     }
 
+    document.getElementById('deleteTeacherAssignmentBtn').addEventListener('click', () => {
+      if (currentAssignmentId && currentAssignmentData) deleteTeacherAssignment(currentAssignmentId, currentAssignmentData);
+    });
+
     async function deleteTeacherAssignment(assignmentId, assignment) {
       const title = assignment?.title || 'this assignment';
       if (!window.confirm(`Delete "${title}" and ALL student work for it? This cannot be undone.`)) return;
