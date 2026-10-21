@@ -696,37 +696,35 @@
       saveStoredAssignment(code, { ...newAssignment, id: docId });
 
       try {
-        if (db) {
-          const savePromise = db.collection('assignments').doc(docId).set({
-            ...newAssignment,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-          });
+        if (!db) throw new Error('Firebase is not available. Check your connection and Firebase configuration.');
 
-          const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error("Timeout")), 3500)
-          );
+        await db.collection('assignments').doc(docId).set({
+          ...newAssignment,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
 
-          await Promise.race([savePromise, timeoutPromise]);
-        }
+        // Limited lookup record: it does not contain slide prompts, backgrounds, or student work.
+        await db.collection('assignmentLookups').doc(code).set({
+          assignmentId: docId,
+          sessionCode: code,
+          teacherId: signedInUser.uid,
+          title: title,
+          status: 'published',
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
 
         currentAssignmentId = docId;
         currentSessionCode = code;
         currentAssignmentData = newAssignment;
+        saveStoredAssignment(code, { ...newAssignment, id: docId });
 
         createAssignmentModal.classList.add('hidden');
         createAssignmentForm.reset();
         showToast(`Published! Session Code: ${code}`, "success");
-        
         loadTeacherAssignmentView(docId);
       } catch (err) {
-        console.warn("Firestore sync fallback to local storage active:", err.message);
-        currentAssignmentId = docId;
-        currentSessionCode = code;
-        currentAssignmentData = newAssignment;
-        createAssignmentModal.classList.add('hidden');
-        createAssignmentForm.reset();
-        showToast(`Published locally! Code: ${code}`, "success");
-        loadTeacherAssignmentView(docId);
+        console.error("Assignment publish failed:", err);
+        showToast('Could not publish assignment to Firebase: ' + err.message, 'error');
       } finally {
         publishBtn.disabled = false;
         publishBtn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> <span>Publish Assignment</span>`;
@@ -745,6 +743,19 @@
       document.getElementById('shareCodeText').textContent = currentAssignmentData.sessionCode;
 
       if (db) {
+        // Backfill a limited lookup record when a teacher opens an existing assignment.
+        if (signedInUser && currentAssignmentData?.sessionCode) {
+          db.collection('assignmentLookups').doc(currentAssignmentData.sessionCode).set({
+            assignmentId,
+            sessionCode: currentAssignmentData.sessionCode,
+            teacherId: signedInUser.uid,
+            title: currentAssignmentData.title || 'Assignment',
+            status: currentAssignmentData.status || 'published',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true }).catch(err => {
+            console.warn('Could not sync session-code lookup:', err);
+          });
+        }
         if (unsubAssignment) unsubAssignment();
         unsubAssignment = db.collection('assignments').doc(assignmentId).onSnapshot(doc => {
           if (!doc.exists) return;
@@ -859,73 +870,61 @@
       let matchedData = null;
       let matchedDocId = null;
 
-      const storedAssignments = getStoredAssignments();
-      if (storedAssignments[inputCode]) {
-        matchedData = storedAssignments[inputCode];
-        matchedDocId = matchedData.id || ("assign_" + inputCode);
-      }
+      studentName = name;
+      studentId = signedInUser.uid;
 
-      if (!matchedData && db) {
-        try {
-          const docDirect = await db.collection('assignments').doc("assign_" + inputCode).get();
-          if (docDirect.exists) {
-            matchedData = docDirect.data();
-            matchedDocId = docDirect.id;
-          } else {
-            const snapshot = await db.collection('assignments').where('sessionCode', '==', inputCode).get();
-            if (!snapshot.empty) {
-              matchedData = snapshot.docs[0].data();
-              matchedDocId = snapshot.docs[0].id;
-            }
-          }
-        } catch (err) {
-          console.warn("Firestore query note:", err.message);
+      try {
+        if (!db) throw new Error('Firebase is not available. Check your connection.');
+
+        // Resolve the session code without reading or querying assignment contents.
+        const lookupDoc = await db.collection('assignmentLookups').doc(inputCode).get();
+        if (!lookupDoc.exists) {
+          throw new Error('Session code not found. Verify the code with your teacher.');
         }
-      }
 
-      if (!matchedData) {
-        showToast(`Session code "${inputCode}" not found. Verify with teacher.`, "error");
+        const lookup = lookupDoc.data();
+        matchedDocId = lookup.assignmentId;
+        if (!matchedDocId) throw new Error('This session code is not configured correctly.');
+
+        const now = firebase.firestore.FieldValue.serverTimestamp();
+
+        // Firestore rules validate that the code maps to this assignment before membership is created.
+        await db.collection('assignments').doc(matchedDocId)
+          .collection('students').doc(studentId).set({
+            uid: studentId,
+            name: studentName,
+            email: signedInUser.email || '',
+            sessionCode: inputCode,
+            joinedAt: now,
+            lastWorkedAt: now
+          }, { merge: true });
+
+        // Assignment content is readable only after the student's membership exists.
+        const assignmentDoc = await db.collection('assignments').doc(matchedDocId).get();
+        if (!assignmentDoc.exists) throw new Error('The assignment is no longer available.');
+        matchedData = assignmentDoc.data();
+
+        await db.collection('users').doc(studentId).collection('submissions').doc(matchedDocId).set({
+          assignmentId: matchedDocId,
+          title: matchedData.title || lookup.title || 'Assignment',
+          description: matchedData.description || '',
+          sessionCode: inputCode,
+          status: 'in-progress',
+          startedAt: now,
+          lastWorkedAt: now,
+          slideCount: (matchedData.slides || []).length
+        }, { merge: true });
+      } catch (err) {
+        console.error('Could not join assignment:', err);
+        showToast('Could not join assignment: ' + err.message, 'error');
         joinBtn.disabled = false;
-        joinBtn.innerHTML = `<span>Start Working</span> <i class="fa-solid fa-arrow-right"></i>`;
+        joinBtn.innerHTML = '<span>Start Working</span> <i class="fa-solid fa-arrow-right"></i>';
         return;
       }
 
       currentAssignmentData = matchedData;
       currentAssignmentId = matchedDocId;
       currentSessionCode = inputCode;
-
-      studentName = signedInUser.displayName || name;
-      studentId = signedInUser.uid;
-
-      if (db && matchedDocId) {
-        try {
-          const now = firebase.firestore.FieldValue.serverTimestamp();
-          await db.collection('assignments').doc(matchedDocId)
-            .collection('students').doc(studentId).set({
-              uid: studentId,
-              name: studentName,
-              email: signedInUser.email || '',
-              joinedAt: now,
-              lastWorkedAt: now
-            }, { merge: true });
-          await db.collection('users').doc(studentId).collection('submissions').doc(matchedDocId).set({
-            assignmentId: matchedDocId,
-            title: matchedData.title || 'Assignment',
-            description: matchedData.description || '',
-            sessionCode: inputCode,
-            status: 'in-progress',
-            startedAt: now,
-            lastWorkedAt: now,
-            slideCount: (matchedData.slides || []).length
-          }, { merge: true });
-        } catch (err) {
-          console.error('Could not create submission:', err);
-          showToast('Could not save your assignment record. Check Firestore rules and try again.', 'error');
-          joinBtn.disabled = false;
-          joinBtn.innerHTML = '<span>Start Working</span> <i class="fa-solid fa-arrow-right"></i>';
-          return;
-        }
-      }
 
       studentJoinScreen.classList.add('hidden');
       studentHistoryScreen.classList.add('hidden');
