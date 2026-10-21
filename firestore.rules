@@ -120,7 +120,9 @@ service cloud.firestore {
       allow delete: if ownsAssignment(assignmentId);
 
       match /assignedStudents/{studentKey} {
-        allow read: if ownsAssignment(assignmentId)
+        allow get: if ownsAssignment(assignmentId)
+          || (signedIn() && studentKey == request.auth.token.email);
+        allow list: if ownsAssignment(assignmentId)
           || (signedIn() && resource.data.studentEmail == request.auth.token.email);
 
         allow create: if ownsAssignment(assignmentId)
