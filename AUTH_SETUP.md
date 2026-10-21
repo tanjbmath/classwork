@@ -15,9 +15,11 @@ This branch adds Google sign-in, student work history, and restricted session-co
 
 ## Session-code lookup
 
-- New assignments are written to `assignments/<assignmentId>`.
+- New assignments are written to `assignments/<assignmentId>`. Assignment documents store a count of assigned students, not the email roster.
+- Teachers assign an assignment to individual students or a class by entering the relevant Google email addresses in the assignment form. The optional class/group label is shown in student history.
+- Each assigned student has a private-to-that-student `assignments/<assignmentId>/assignedStudents/<email>` record with the initial `assignment-started` status.
 - A separate `assignmentLookups/<SESSION_CODE>` document contains only the assignment ID, session code, teacher UID, title, status, and creation timestamp. It does not contain slide prompts, background URLs, or student work.
-- A student gets a lookup document by its exact code, creates their membership record, and only then reads assignment content.
+- Students can see assignments addressed to their signed-in Google email before joining. Starting an assigned assignment creates their membership record and changes the status to `in-progress`. The student must be included in the assignment audience to join.
 - Signed-in users can read a lookup when they know its code, but cannot list the lookup collection.
 - The teacher app attempts to create/update the lookup when a teacher opens an existing assignment. This does not automatically migrate every old assignment in the database.
 
@@ -26,7 +28,9 @@ This branch adds Google sign-in, student work history, and restricted session-co
 - Google sign-in uses a stable Firebase UID.
 - Canvas work is stored under `assignments/<assignmentId>/students/<uid>/slides/<slideId>`.
 - A history index is stored under `users/<uid>/submissions/<assignmentId>`.
-- Student history is private to that student.
+- Student history is private to that student and combines assigned-work records with the student's own submission history.
+- Status transitions are `assignment-started` (teacher assigns), `in-progress` (student starts or revises), `submitted` (student submits for review), and `completed` (teacher accepts). The teacher's **Amendments Needed** action returns the work to `in-progress`.
+- Submitted and completed work is read-only in the student canvas. Teacher review actions are restricted by Firestore rules.
 - Teacher access to assignment and student work is limited by the manually assigned teacher role and assignment ownership.
 - Legacy timestamp-ID student records are not automatically attributed to a Google account.
 - Canvas images are currently stored as data URLs in Firestore. Large drawings may hit Firestore's document-size limit; moving images to Cloud Storage is a follow-up improvement.
@@ -34,7 +38,12 @@ This branch adds Google sign-in, student work history, and restricted session-co
 ## Smoke-test checklist
 
 - [ ] Sign in with Google; refresh the page and confirm the session persists.
-- [ ] As a teacher, create a test assignment and confirm both the assignment and `assignmentLookups/<SESSION_CODE>` documents appear.
+- [ ] As a teacher, create a test assignment for one or more test student email addresses and confirm the assignment, lookup, and assigned-student records appear.
+- [ ] Sign in with a listed student account and confirm the assignment appears as **Assignment Started** before joining.
+- [ ] Start the assignment and confirm the status changes to **In Progress**.
+- [ ] Draw on the canvas and submit the work; confirm the status changes to **Submitted** and editing is blocked.
+- [ ] As the teacher, mark the work **Completed** and confirm the student sees the completed status; repeat with **Amendments Needed** and confirm the student can edit again.
+- [ ] Confirm a Google account not in the assignment audience cannot join that assignment.
 - [ ] Sign in with a separate student account and join using the code.
 - [ ] Draw on slide 1 and slide 2; verify canvas data saves in Firestore.
 - [ ] Sign out and back in, open **Student Portal → My Past Work → Reopen work**, and verify the saved work restores.
