@@ -198,6 +198,14 @@
 
         <!-- Drawing Toolbar -->
         <div class="flex items-center flex-wrap gap-2">
+          <!-- Stylus vs Hand Mode Toggle -->
+          <div class="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
+            <button id="inputModeBtn" title="Toggle Input Mode (Stylus Palm Rejection vs Touch)" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded transition bg-emerald-600 text-white shadow-sm">
+              <i id="inputModeIcon" class="fa-solid fa-pen-nib"></i>
+              <span id="inputModeText">Stylus Only</span>
+            </button>
+          </div>
+
           <div class="flex bg-slate-100 p-1 rounded-lg gap-1 border border-slate-200">
             <button id="toolPen" title="Pen Tool" class="tool-btn bg-indigo-600 text-white px-3 py-1.5 rounded text-sm transition">
               <i class="fa-solid fa-pen"></i>
@@ -361,6 +369,7 @@
     let isDrawing = false;
     let lastX = 0;
     let lastY = 0;
+    let isStylusOnlyMode = true; // Default to Stylus Only Mode for active palm rejection
 
     let unsubAssignment = null;
     let unsubStudents = null;
@@ -906,6 +915,9 @@
     const toolText = document.getElementById('toolText');
     const colorPicker = document.getElementById('colorPicker');
     const brushSize = document.getElementById('brushSize');
+    const inputModeBtn = document.getElementById('inputModeBtn');
+    const inputModeIcon = document.getElementById('inputModeIcon');
+    const inputModeText = document.getElementById('inputModeText');
 
     toolPen.addEventListener('click', () => setTool('pen'));
     toolEraser.addEventListener('click', () => setTool('eraser'));
@@ -913,6 +925,22 @@
 
     colorPicker.addEventListener('input', (e) => currentColor = e.target.value);
     brushSize.addEventListener('input', (e) => currentLineWidth = e.target.value);
+
+    // Toggle between Stylus Only (Palm Rejection) and Hand/Touch Mode
+    inputModeBtn.addEventListener('click', () => {
+      isStylusOnlyMode = !isStylusOnlyMode;
+      if (isStylusOnlyMode) {
+        inputModeBtn.className = "flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded transition bg-emerald-600 text-white shadow-sm";
+        inputModeIcon.className = "fa-solid fa-pen-nib";
+        inputModeText.textContent = "Stylus Only";
+        showToast("Stylus Mode Enabled: Palm touches on canvas are ignored", "info");
+      } else {
+        inputModeBtn.className = "flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded transition bg-amber-500 text-white shadow-sm";
+        inputModeIcon.className = "fa-solid fa-hand";
+        inputModeText.textContent = "Touch & Hand";
+        showToast("Touch Mode Enabled: Finger draw allowed", "info");
+      }
+    });
 
     function setTool(tool) {
       activeTool = tool;
@@ -948,10 +976,13 @@
       };
     }
 
-    // Advanced Pointer Events for Stylus / Apple Pencil + Palm Rejection
+    // Advanced Pointer Events for Stylus / Apple Pencil + Palm Rejection Toggle
     function handlePointerDown(e) {
-      // If pointerType is touch and not a stylus, you can optionally filter, 
-      // but standard pointer events handle stylus natively via e.pointerType === 'pen'
+      // In Stylus Only mode, filter out touch/finger input to reject palm contact completely
+      if (isStylusOnlyMode && e.pointerType === 'touch') {
+        return;
+      }
+
       const coords = getCanvasCoordinates(e);
 
       if (activeTool === 'text') {
@@ -973,6 +1004,12 @@
 
     function handlePointerMove(e) {
       if (!isDrawing) return;
+
+      // Filter touch points in Stylus Only mode during motion
+      if (isStylusOnlyMode && e.pointerType === 'touch') {
+        return;
+      }
+
       e.preventDefault();
 
       const coords = getCanvasCoordinates(e);
@@ -1012,18 +1049,39 @@
     mainCanvas.addEventListener('pointerup', handlePointerUp);
     mainCanvas.addEventListener('pointercancel', handlePointerUp);
 
+    // Prevent default touch gestures on canvas wrapper to stop page reset / reload on swipe
+    canvasWrapper.addEventListener('touchstart', (e) => {
+      if (isStylusOnlyMode && e.touches.length > 0 && e.touches[0].touchType !== 'stylus') {
+        return; // Allow page scroll if in stylus mode and touching with hand outside canvas stroke
+      }
+    }, { passive: true });
+
     // ==========================================
-    // UTILITY FUNCTIONS
+    // UTILITY & NOTIFICATION FUNCTIONS
     // ==========================================
-    function showToast(message, type = 'info') {
+    function showToast(message, type = "info") {
       const container = document.getElementById('toastContainer');
       const toast = document.createElement('div');
+
+      const bgColors = {
+        success: 'bg-emerald-600 text-white',
+        error: 'bg-rose-600 text-white',
+        info: 'bg-indigo-600 text-white'
+      };
+
+      toast.className = `${bgColors[type] || bgColors.info} px-4 py-3 rounded-lg shadow-lg flex items-center justify-between gap-3 text-sm font-medium transition-all duration-300 transform translate-y-2 opacity-100`;
       
-      const bgClass = type === 'error' ? 'bg-rose-600' : (type === 'success' ? 'bg-emerald-600' : 'bg-slate-800');
-      toast.className = `${bgClass} text-white px-4 py-3 rounded-lg shadow-lg text-sm font-medium flex items-center gap-2 transition-all duration-300 transform translate-y-2`;
+      const iconClass = type === 'success' ? 'fa-check-circle' : (type === 'error' ? 'fa-exclamation-triangle' : 'fa-info-circle');
       
-      const icon = type === 'error' ? 'fa-circle-exclamation' : (type === 'success' ? 'fa-circle-check' : 'fa-info-circle');
-      toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${escapeHtml(message)}</span>`;
+      toast.innerHTML = `
+        <div class="flex items-center gap-2">
+          <i class="fa-solid ${iconClass}"></i>
+          <span>${escapeHtml(message)}</span>
+        </div>
+        <button type="button" class="text-white/80 hover:text-white font-bold text-lg leading-none">&times;</button>
+      `;
+
+      toast.querySelector('button').addEventListener('click', () => toast.remove());
 
       container.appendChild(toast);
 
