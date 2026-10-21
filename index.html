@@ -1082,6 +1082,7 @@
         }
         if (student.studentUid) {
           await db.collection('users').doc(student.studentUid).collection('submissions').doc(currentAssignmentId).set(update, { merge: true });
+          await db.collection('assignments').doc(currentAssignmentId).collection('students').doc(student.studentUid).set(update, { merge: true });
         }
         showToast(status === 'completed' ? 'Work marked completed.' : 'Amendments requested. Student can continue editing.', 'success');
       } catch (err) {
@@ -1155,6 +1156,7 @@
           .collection('students').doc(studentId).set({
             uid: studentId,
             name: studentName,
+            status: 'in-progress',
             email: signedInUser.email || '',
             sessionCode: inputCode,
             joinedAt: now,
@@ -1324,6 +1326,10 @@
         const now = firebase.firestore.FieldValue.serverTimestamp();
         await db.collection('users').doc(signedInUser.uid).collection('submissions').doc(currentAssignmentId).set({
           assignmentId: currentAssignmentId, title: currentAssignmentData?.title || 'Assignment',
+          status: 'submitted', submittedAt: now, lastWorkedAt: now
+        }, { merge: true });
+        await db.collection('assignments').doc(currentAssignmentId).collection('students').doc(signedInUser.uid).set({
+          uid: signedInUser.uid, name: studentName || signedInUser.displayName || 'Student',
           status: 'submitted', submittedAt: now, lastWorkedAt: now
         }, { merge: true });
         if (currentAssignedStudentKey) {
