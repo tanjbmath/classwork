@@ -487,8 +487,25 @@
     });
     resetRoleBtn.addEventListener('click', resetRole);
 
-    function switchRole(role) {
+    async function switchRole(role) {
       if (!signedInUser) { showToast('Sign in with Google first.', 'error'); return; }
+
+      // The teacher UI is not an authorization boundary, but it should still
+      // avoid exposing teacher controls to accounts without an assigned role.
+      if (role === 'teacher') {
+        try {
+          const profile = await db.collection('users').doc(signedInUser.uid).get();
+          if (!profile.exists || profile.data().role !== 'teacher') {
+            showToast('This Google account has not been assigned the teacher role.', 'error');
+            return;
+          }
+        } catch (err) {
+          console.error('Teacher role check failed:', err);
+          showToast('Could not verify teacher access. Check your connection and try again.', 'error');
+          return;
+        }
+      }
+
       currentUserRole = role;
       roleSelectionScreen.classList.add('hidden');
       studentHistoryScreen.classList.add('hidden');
