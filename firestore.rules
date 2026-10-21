@@ -9,8 +9,8 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == uid;
     }
 
-    // A teacher role must be assigned by a trusted administrator in the
-    // Firebase console. Never let users grant themselves this role.
+    // Assign the teacher role manually in Firebase Console after verifying
+    // the teacher's UID. A user must never be able to grant this role.
     function isTeacher() {
       return signedIn()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
@@ -24,14 +24,16 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      allow read: if isOwner(uid) || isTeacher();
+      // Profile documents are private to their owner.
+      allow read: if isOwner(uid);
 
-      // Users can maintain their own profile, but cannot create or change role.
+      // A user can create their profile but cannot assign themselves a role.
       allow create: if isOwner(uid)
         && request.resource.data.keys().hasOnly([
           'displayName', 'email', 'photoURL', 'lastSignInAt'
         ]);
 
+      // Users cannot add, change, or remove the role field themselves.
       allow update: if isOwner(uid)
         && request.resource.data.role == resource.data.role
         && request.resource.data.keys().hasOnly([
@@ -41,7 +43,8 @@ service cloud.firestore {
       allow delete: if false;
 
       match /submissions/{assignmentId} {
-        allow read: if isOwner(uid) || isTeacher();
+        // Past-work history is private to the student.
+        allow read: if isOwner(uid);
         allow create, update: if isOwner(uid)
           && request.resource.data.assignmentId == assignmentId;
         allow delete: if false;
@@ -49,22 +52,28 @@ service cloud.firestore {
     }
 
     match /assignments/{assignmentId} {
-      // Authenticated users may discover an assignment by its session code.
+      // NOTE: This broad read is currently needed by the app's session-code
+      // lookup. It means any signed-in user can read assignment documents.
+      // A future hardening step should use a dedicated join-code lookup
+      // document so assignment contents and metadata are not broadly readable.
       allow read: if signedIn();
+
       allow create: if isTeacher()
         && request.resource.data.teacherId == request.auth.uid;
       allow update: if isTeacher()
-        && resource.data.teacherId == request.auth.uid;
-      allow delete: if isTeacher()
-        && resource.data.teacherId == request.auth.uid;
+        && resource.data.teacherId == request.auth.uid
+        && request.resource.data.teacherId == resource.data.teacherId;
+      allow delete: if ownsAssignment(assignmentId);
 
       match /students/{studentUid} {
+        // Teachers can see only student records for assignments they own.
         allow read: if isOwner(studentUid) || ownsAssignment(assignmentId);
         allow create, update: if isOwner(studentUid) || ownsAssignment(assignmentId);
         allow delete: if ownsAssignment(assignmentId);
 
         match /slides/{slideId} {
-          allow read: if isOwner(studentUid) || isTeacher();
+          // Live monitoring is limited to the student and the assignment's teacher.
+          allow read: if isOwner(studentUid) || ownsAssignment(assignmentId);
           allow create, update: if isOwner(studentUid) || ownsAssignment(assignmentId);
           allow delete: if ownsAssignment(assignmentId);
         }
