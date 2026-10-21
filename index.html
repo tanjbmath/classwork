@@ -88,7 +88,7 @@
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <!-- Teacher Select -->
-        <button id="selectTeacherBtn" class="p-6 bg-indigo-50 hover:bg-indigo-100 border-2 border-indigo-200 hover:border-indigo-500 rounded-xl transition-all text-left flex flex-col items-center justify-center text-center group shadow-sm hover:shadow-md">
+        <button id="selectTeacherBtn" class="hidden p-6 bg-indigo-50 hover:bg-indigo-100 border-2 border-indigo-200 hover:border-indigo-500 rounded-xl transition-all text-left flex flex-col items-center justify-center text-center group shadow-sm hover:shadow-md">
           <div class="w-16 h-16 bg-indigo-600 text-white rounded-full flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform">
             <i class="fa-solid fa-user-gear"></i>
           </div>
@@ -351,6 +351,7 @@
     let auth = null;
     let isFirebaseReady = false;
     let signedInUser = null;
+    let accountRole = 'student';
     let historyUnsubscribe = null;
     const googleProvider = new firebase.auth.GoogleAuthProvider();
 
@@ -375,19 +376,40 @@
           else photo.classList.add('hidden');
           studentBtn.disabled = false;
           document.getElementById('connectionBadge').innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400"></span> Signed in';
+          const teacherBtn = document.getElementById('selectTeacherBtn');
+          teacherBtn.classList.add('hidden');
+          accountRole = 'student';
           try {
-            await db.collection('users').doc(user.uid).set({
+            const userRef = db.collection('users').doc(user.uid);
+            await userRef.set({
               displayName: user.displayName || '',
               email: user.email || '',
               photoURL: user.photoURL || '',
               lastSignInAt: firebase.firestore.FieldValue.serverTimestamp()
             }, { merge: true });
-          } catch (err) { console.warn('Profile sync notice:', err); }
+            const profile = await userRef.get();
+            accountRole = profile.exists && profile.data().role === 'teacher' ? 'teacher' : 'student';
+          } catch (err) {
+            console.warn('Profile/role lookup notice:', err);
+            showToast('Could not verify your account role. Student access remains available.', 'info');
+          }
+          if (accountRole === 'teacher') {
+            teacherBtn.classList.remove('hidden');
+            roleBadge.textContent = 'Teacher Account';
+            roleBadge.className = 'bg-indigo-800 text-indigo-100 px-3 py-1 rounded-full font-medium shadow-inner';
+          } else {
+            roleBadge.textContent = 'Student Account';
+            roleBadge.className = 'bg-emerald-800 text-emerald-100 px-3 py-1 rounded-full font-medium shadow-inner';
+          }
           renderStudentHistory();
         } else {
           signedOut.classList.remove('hidden');
           signedIn.classList.add('hidden');
           studentBtn.disabled = true;
+          accountRole = 'student';
+          document.getElementById('selectTeacherBtn').classList.add('hidden');
+          roleBadge.textContent = 'Sign in required';
+          roleBadge.className = 'bg-slate-700 text-slate-100 px-3 py-1 rounded-full font-medium shadow-inner';
           document.getElementById('connectionBadge').innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-400"></span> Sign in required';
           if (historyUnsubscribe) { historyUnsubscribe(); historyUnsubscribe = null; }
           studentHistoryScreen.classList.add('hidden');
@@ -542,7 +564,10 @@
       
       roleSelectionScreen.classList.remove('hidden');
       resetRoleBtn.classList.add('hidden');
-      roleBadge.textContent = "Connected";
+      roleBadge.textContent = accountRole === 'teacher' ? 'Teacher Account' : 'Student Account';
+      roleBadge.className = accountRole === 'teacher'
+        ? 'bg-indigo-800 text-indigo-100 px-3 py-1 rounded-full font-medium shadow-inner'
+        : 'bg-emerald-800 text-emerald-100 px-3 py-1 rounded-full font-medium shadow-inner';
     }
 
     document.getElementById('copyCodeBtn').addEventListener('click', () => {
