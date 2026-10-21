@@ -49,11 +49,30 @@ service cloud.firestore {
 
       match /submissions/{assignmentId} {
         allow read: if isOwner(uid);
-        allow create, update: if isOwner(uid)
+        allow create: if isOwner(uid)
           && request.resource.data.assignmentId == assignmentId
+          && request.resource.data.status in ['in-progress', 'submitted']
           && isAssignmentMember(assignmentId, uid);
+        allow update: if (
+            isOwner(uid)
+            && request.resource.data.assignmentId == assignmentId
+            && isAssignmentMember(assignmentId, uid)
+            && resource.data.status != 'completed'
+            && request.resource.data.status in ['in-progress', 'submitted']
+            && (resource.data.status != 'submitted' || request.resource.data.status == 'submitted')
+          ) || (
+            ownsAssignment(assignmentId)
+            && request.resource.data.assignmentId == assignmentId
+            && request.resource.data.status in ['completed', 'in-progress']
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reviewedAt', 'reviewOutcome'])
+          );
         allow delete: if false;
       }
+    }
+
+    // Collection-group reads are limited to the signed-in student's own email.
+    match /{path=**}/assignedStudents/{studentKey} {
+      allow read: if signedIn() && resource.data.studentEmail == request.auth.token.email;
     }
 
     // A known session code can resolve to a limited lookup record; codes cannot be listed.
@@ -87,7 +106,7 @@ service cloud.firestore {
     }
 
     match /assignments/{assignmentId} {
-      allow read: if ownsAssignment(assignmentId)
+      allow read: if (isTeacher() && resource.data.teacherId == request.auth.uid)
         || (signedIn() && isAssignmentMember(assignmentId, request.auth.uid));
 
       allow create: if isTeacher()
@@ -99,6 +118,44 @@ service cloud.firestore {
         && request.resource.data.sessionCode == resource.data.sessionCode;
 
       allow delete: if ownsAssignment(assignmentId);
+
+      match /assignedStudents/{studentKey} {
+        allow read: if ownsAssignment(assignmentId)
+          || (signedIn() && resource.data.studentEmail == request.auth.token.email);
+
+        allow create: if ownsAssignment(assignmentId)
+          && request.resource.data.assignmentId == assignmentId
+          && request.resource.data.teacherId == request.auth.uid
+          && request.resource.data.studentEmail is string
+          && request.resource.data.status == 'assignment-started'
+          && request.resource.data.keys().hasOnly([
+            'assignmentId', 'studentEmail', 'teacherId', 'title', 'description',
+            'sessionCode', 'classLabel', 'status', 'assignedAt'
+          ]);
+
+        allow update: if (
+            ownsAssignment(assignmentId)
+            && request.resource.data.assignmentId == resource.data.assignmentId
+            && request.resource.data.studentEmail == resource.data.studentEmail
+            && request.resource.data.teacherId == resource.data.teacherId
+            && request.resource.data.status in ['completed', 'in-progress']
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reviewedAt', 'reviewOutcome'])
+          ) || (
+            signedIn()
+            && resource.data.studentEmail == request.auth.token.email
+            && request.resource.data.studentEmail == resource.data.studentEmail
+            && request.resource.data.assignmentId == resource.data.assignmentId
+            && request.resource.data.teacherId == resource.data.teacherId
+            && request.resource.data.status in ['in-progress', 'submitted']
+            && (
+              (resource.data.status == 'assignment-started' && request.resource.data.status == 'in-progress')
+              || (resource.data.status == 'in-progress' && request.resource.data.status in ['in-progress', 'submitted'])
+            )
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'startedAt', 'lastWorkedAt', 'submittedAt'])
+          );
+
+        allow delete: if ownsAssignment(assignmentId);
+      }
 
       match /students/{studentUid} {
         allow read: if isOwner(studentUid) || ownsAssignment(assignmentId);
