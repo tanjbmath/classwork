@@ -730,7 +730,7 @@
         createdAt: new Date().toISOString(),
         status: 'published',
         classLabel,
-        assignedEmails: studentEmails
+        assignedStudentCount: studentEmails.length
       };
 
       let docId = "assign_" + code;
@@ -870,7 +870,7 @@
             title.textContent = item.title || 'Untitled assignment';
             const meta = document.createElement('div');
             meta.className = 'text-xs text-slate-500 mt-1';
-            meta.textContent = 'Code: ' + (item.sessionCode || '—') + ' • ' + ((item.assignedEmails || []).length || 0) + ' assigned';
+            meta.textContent = 'Code: ' + (item.sessionCode || '—') + ' • ' + (item.assignedStudentCount || 0) + ' assigned';
             card.append(title, meta);
             card.addEventListener('click', () => {
               currentAssignmentId = item.id; currentAssignmentData = item; currentSessionCode = item.sessionCode || '';
