@@ -1470,6 +1470,10 @@
     }
 
     document.getElementById('clearCanvasBtn').addEventListener('click', () => {
+      if (currentUserRole === 'student' && currentSubmissionStatus !== 'in-progress') {
+        showToast('This assignment is read-only until your teacher requests amendments.', 'info');
+        return;
+      }
       redrawBackgroundAndCanvas();
       saveCanvasToFirestore();
     });
