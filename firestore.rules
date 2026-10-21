@@ -17,6 +17,12 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher';
     }
 
+    function ownsAssignment(assignmentId) {
+      return isTeacher()
+        && exists(/databases/$(database)/documents/assignments/$(assignmentId))
+        && get(/databases/$(database)/documents/assignments/$(assignmentId)).data.teacherId == request.auth.uid;
+    }
+
     match /users/{uid} {
       allow read: if isOwner(uid) || isTeacher();
 
@@ -53,20 +59,14 @@ service cloud.firestore {
         && resource.data.teacherId == request.auth.uid;
 
       match /students/{studentUid} {
-        allow read: if isOwner(studentUid) || isTeacher();
-        allow create, update: if isOwner(studentUid)
-          || (isTeacher()
-            && get(/databases/$(database)/documents/assignments/$(assignmentId)).data.teacherId == request.auth.uid);
-        allow delete: if isTeacher()
-          && get(/databases/$(database)/documents/assignments/$(assignmentId)).data.teacherId == request.auth.uid;
+        allow read: if isOwner(studentUid) || ownsAssignment(assignmentId);
+        allow create, update: if isOwner(studentUid) || ownsAssignment(assignmentId);
+        allow delete: if ownsAssignment(assignmentId);
 
         match /slides/{slideId} {
           allow read: if isOwner(studentUid) || isTeacher();
-          allow create, update: if isOwner(studentUid)
-            || (isTeacher()
-              && get(/databases/$(database)/documents/assignments/$(assignmentId)).data.teacherId == request.auth.uid);
-          allow delete: if isTeacher()
-            && get(/databases/$(database)/documents/assignments/$(assignmentId)).data.teacherId == request.auth.uid;
+          allow create, update: if isOwner(studentUid) || ownsAssignment(assignmentId);
+          allow delete: if ownsAssignment(assignmentId);
         }
       }
     }
