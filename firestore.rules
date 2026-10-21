@@ -111,7 +111,9 @@ service cloud.firestore {
 
       allow create: if isTeacher()
         && request.resource.data.teacherId == request.auth.uid
-        && request.resource.data.sessionCode is string;
+        && request.resource.data.sessionCode is string
+        && request.resource.data.assignedEmails is list
+        && request.resource.data.assignedEmails.size() > 0;
 
       allow update: if ownsAssignment(assignmentId)
         && request.resource.data.teacherId == resource.data.teacherId
@@ -129,6 +131,7 @@ service cloud.firestore {
           && request.resource.data.assignmentId == assignmentId
           && request.resource.data.teacherId == request.auth.uid
           && request.resource.data.studentEmail is string
+          && request.resource.data.studentEmail in get(/databases/$(database)/documents/assignments/$(assignmentId)).data.assignedEmails
           && request.resource.data.status == 'assignment-started'
           && request.resource.data.keys().hasOnly([
             'assignmentId', 'studentEmail', 'teacherId', 'title', 'description',
@@ -167,7 +170,9 @@ service cloud.firestore {
           && request.resource.data.sessionCode is string
           && exists(/databases/$(database)/documents/assignmentLookups/$(request.resource.data.sessionCode))
           && get(/databases/$(database)/documents/assignmentLookups/$(request.resource.data.sessionCode)).data.assignmentId == assignmentId
-          && exists(/databases/$(database)/documents/assignments/$(assignmentId));
+          && exists(/databases/$(database)/documents/assignments/$(assignmentId))
+          && exists(/databases/$(database)/documents/assignments/$(assignmentId)/assignedStudents/$(request.auth.token.email))
+          && get(/databases/$(database)/documents/assignments/$(assignmentId)/assignedStudents/$(request.auth.token.email)).data.studentEmail == request.auth.token.email;
 
         allow update: if (
             isOwner(studentUid)
