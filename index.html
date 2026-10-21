@@ -1552,7 +1552,7 @@
 
       const coords = getCanvasCoordinates(e);
 
-      if (activeTool === 'text') {
+      if (activeTool === 'text' && !lineEraserMode) {
         const text = prompt("Enter text overlay:");
         if (text) {
           beginCanvasAction();
