@@ -690,6 +690,7 @@
       const title = document.getElementById('assignTitleInput').value.trim();
       const desc = document.getElementById('assignDescInput').value.trim();
       const classLabel = document.getElementById('assignClassLabelInput').value.trim();
+
       if (!title) {
         showToast("Please enter an assignment title", "error");
         return;
@@ -753,6 +754,7 @@
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
+
         currentAssignmentId = docId;
         currentSessionCode = code;
         currentAssignmentData = newAssignment;
@@ -813,6 +815,7 @@
           console.warn("Student listener notice:", err);
           currentJoinedStudents = [];
           renderTeacherRoster();
+
         });
         if (unsubAssignedStudents) unsubAssignedStudents();
         currentAssignedStudents = [];

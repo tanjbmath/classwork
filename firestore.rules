@@ -113,7 +113,7 @@ service cloud.firestore {
         && request.resource.data.teacherId == request.auth.uid
         && request.resource.data.sessionCode is string
         && request.resource.data.assignedStudentCount is int
-        && request.resource.data.assignedStudentCount == 0;
+&& request.resource.data.assignedStudentCount == 0;
 
       allow update: if ownsAssignment(assignmentId)
         && request.resource.data.teacherId == resource.data.teacherId
