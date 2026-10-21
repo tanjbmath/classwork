@@ -26,10 +26,16 @@
     }
     .canvas-container {
       position: relative;
-      touch-action: none; /* Prevents default browser scroll gestures while drawing on canvas */
-    }
-    canvas {
       touch-action: none;
+      overscroll-behavior: contain;
+    }
+    #mainCanvas {
+      position: absolute;
+      left: 0;
+      top: 0;
+      transform-origin: 0 0;
+      touch-action: none;
+      max-width: none;
     }
   </style>
 </head>
@@ -272,6 +278,13 @@
             <button id="toolText" title="Text Tool" class="tool-btn bg-white hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded text-sm transition">
               <i class="fa-solid fa-font"></i>
             </button>
+          </div>
+
+          <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200" aria-label="Canvas zoom controls">
+            <button id="canvasZoomOutBtn" type="button" title="Zoom out" class="px-2.5 py-1.5 rounded bg-white hover:bg-slate-200 text-slate-700 text-sm"><i class="fa-solid fa-minus"></i></button>
+            <span id="canvasZoomLabel" class="text-xs font-semibold text-slate-600 min-w-12 text-center">100%</span>
+            <button id="canvasZoomInBtn" type="button" title="Zoom in" class="px-2.5 py-1.5 rounded bg-white hover:bg-slate-200 text-slate-700 text-sm"><i class="fa-solid fa-plus"></i></button>
+            <button id="canvasZoomResetBtn" type="button" title="Reset zoom" class="px-2.5 py-1.5 rounded bg-white hover:bg-slate-200 text-slate-700 text-xs">Reset</button>
           </div>
 
           <!-- Color Picker -->
@@ -1458,6 +1471,7 @@
 
       mainCanvas.width = rect.width;
       mainCanvas.height = rect.height;
+      applyCanvasZoom();
 
       redrawBackgroundAndCanvas();
       // Restore previous drawing buffer
@@ -1704,13 +1718,86 @@
       saveCanvasToFirestore();
     });
 
+    // Canvas zoom is applied with CSS transforms; convert pointer positions back to canvas space.
+    let canvasZoom = 1;
+    let canvasPanX = 0;
+    let canvasPanY = 0;
+    const MIN_CANVAS_ZOOM = 1;
+    const MAX_CANVAS_ZOOM = 3.5;
+
+    function applyCanvasZoom() {
+      mainCanvas.style.transform = `translate(${canvasPanX}px, ${canvasPanY}px) scale(${canvasZoom})`;
+      const label = document.getElementById('canvasZoomLabel');
+      if (label) label.textContent = Math.round(canvasZoom * 100) + '%';
+    }
+
+    function setCanvasZoom(nextZoom, anchorX, anchorY) {
+      const wrapperRect = canvasWrapper.getBoundingClientRect();
+      const cx = anchorX ?? wrapperRect.width / 2;
+      const cy = anchorY ?? wrapperRect.height / 2;
+      const oldZoom = canvasZoom;
+      const next = Math.max(MIN_CANVAS_ZOOM, Math.min(MAX_CANVAS_ZOOM, nextZoom));
+      if (next === oldZoom) return;
+      // Keep the canvas point under the anchor stationary while changing zoom.
+      canvasPanX = cx - (cx - canvasPanX) * (next / oldZoom);
+      canvasPanY = cy - (cy - canvasPanY) * (next / oldZoom);
+      canvasZoom = next;
+      if (canvasZoom === 1) { canvasPanX = 0; canvasPanY = 0; }
+      applyCanvasZoom();
+    }
+
+    function resetCanvasZoom() {
+      canvasZoom = 1; canvasPanX = 0; canvasPanY = 0;
+      applyCanvasZoom();
+    }
+
+    document.getElementById('canvasZoomInBtn').addEventListener('click', () => setCanvasZoom(canvasZoom + 0.25));
+    document.getElementById('canvasZoomOutBtn').addEventListener('click', () => setCanvasZoom(canvasZoom - 0.25));
+    document.getElementById('canvasZoomResetBtn').addEventListener('click', resetCanvasZoom);
+
+    // Two-finger pinch zoom for touchscreens. One-finger/stylus input remains available for writing.
+    let pinchStartDistance = 0;
+    let pinchStartZoom = 1;
+    let pinchMidpoint = null;
+    canvasWrapper.addEventListener('touchstart', e => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const rect = canvasWrapper.getBoundingClientRect();
+        const p1 = e.touches[0], p2 = e.touches[1];
+        pinchStartDistance = Math.hypot(p2.clientX - p1.clientX, p2.clientY - p1.clientY);
+        pinchStartZoom = canvasZoom;
+        pinchMidpoint = { x: (p1.clientX + p2.clientX) / 2 - rect.left, y: (p1.clientY + p2.clientY) / 2 - rect.top };
+        isDrawing = false;
+      }
+    }, { passive: false });
+
+    canvasWrapper.addEventListener('touchmove', e => {
+      if (e.touches.length !== 2 || !pinchStartDistance || !pinchMidpoint) return;
+      e.preventDefault();
+      const p1 = e.touches[0], p2 = e.touches[1];
+      const distance = Math.hypot(p2.clientX - p1.clientX, p2.clientY - p1.clientY);
+      const rect = canvasWrapper.getBoundingClientRect();
+      const mid = { x: (p1.clientX + p2.clientX) / 2 - rect.left, y: (p1.clientY + p2.clientY) / 2 - rect.top };
+      const nextZoom = Math.max(MIN_CANVAS_ZOOM, Math.min(MAX_CANVAS_ZOOM, pinchStartZoom * distance / pinchStartDistance));
+      // Follow the pinch midpoint as well as scaling around it.
+      const contentX = (pinchMidpoint.x - canvasPanX) / canvasZoom;
+      const contentY = (pinchMidpoint.y - canvasPanY) / canvasZoom;
+      canvasZoom = nextZoom;
+      canvasPanX = mid.x - contentX * canvasZoom;
+      canvasPanY = mid.y - contentY * canvasZoom;
+      if (canvasZoom === 1) { canvasPanX = 0; canvasPanY = 0; }
+      applyCanvasZoom();
+    }, { passive: false });
+
+    canvasWrapper.addEventListener('touchend', e => {
+      if (e.touches.length < 2) { pinchStartDistance = 0; pinchMidpoint = null; }
+    }, { passive: true });
+
     function getCanvasCoordinates(e) {
-      const rect = mainCanvas.getBoundingClientRect();
-      const clientX = e.clientX;
-      const clientY = e.clientY;
+      const rect = canvasWrapper.getBoundingClientRect();
       return {
-        x: (clientX - rect.left) * (mainCanvas.width / rect.width),
-        y: (clientY - rect.top) * (mainCanvas.height / rect.height)
+        x: ((e.clientX - rect.left - canvasPanX) / canvasZoom) * (mainCanvas.width / canvasWrapper.clientWidth),
+        y: ((e.clientY - rect.top - canvasPanY) / canvasZoom) * (mainCanvas.height / canvasWrapper.clientHeight)
       };
     }
 
