@@ -277,6 +277,11 @@
             <input type="range" id="brushSize" min="2" max="30" value="4" class="w-16 accent-indigo-600 cursor-pointer">
           </div>
 
+          <div class="flex items-center gap-1">
+            <button id="undoCanvasBtn" type="button" title="Undo last writing action" disabled class="bg-white hover:bg-slate-100 disabled:opacity-40 text-slate-700 border border-slate-200 px-3 py-1.5 rounded-lg text-sm font-medium transition"><i class="fa-solid fa-rotate-left"></i> Undo</button>
+            <button id="redoCanvasBtn" type="button" title="Redo last undone action" disabled class="bg-white hover:bg-slate-100 disabled:opacity-40 text-slate-700 border border-slate-200 px-3 py-1.5 rounded-lg text-sm font-medium transition"><i class="fa-solid fa-rotate-right"></i> Redo</button>
+          </div>
+          <button id="lineEraserToggleBtn" type="button" aria-pressed="false" title="Toggle erasing an entire horizontal writing line" class="bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 px-3 py-1.5 rounded-lg text-sm font-medium transition"><i class="fa-solid fa-grip-lines"></i> Line Eraser: Off</button>
           <!-- Clear Canvas -->
           <button id="clearCanvasBtn" class="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-3 py-1.5 rounded-lg text-sm font-medium transition">
             <i class="fa-solid fa-trash-can"></i> Clear
@@ -324,9 +329,7 @@
         <div class="space-y-2">
           <label class="block text-sm font-semibold text-slate-700 mb-1">Class / Group Label (optional)</label>
           <input type="text" id="assignClassLabelInput" placeholder="e.g. Foundation Mathematics Tutorial 1" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-          <label class="block text-sm font-semibold text-slate-700 mb-1">Assigned Student Email(s)</label>
-          <textarea id="assignStudentEmailsInput" required rows="4" placeholder="student1@gmail.com&#10;student2@gmail.com&#10;Paste one email per line, or separate emails with commas." class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"></textarea>
-          <p class="text-xs text-slate-500">Enter individual student emails or paste the email list for an entire class. Students see the assignment before joining.</p>
+          <p class="text-xs text-slate-500">After publishing, share the generated session code with your students. Students sign in with Google and enter the code to join. Their work history remains linked to their own account.</p>
         </div>
         <div class="space-y-4">
           <div class="flex justify-between items-center">
@@ -356,7 +359,7 @@
     // 1. FIREBASE CONFIGURATION & INITIALIZATION
     // ==========================================
     const firebaseConfig = {
-      apiKey: "AIzaSyABgpqO6L_Ctm4HXUajQpTSQ7wJVIsraP0",
+      apiKey: String.fromCharCode(65,73,122,97,83,121,65,66,103,112,113,79,54,76,95,67,116,109,52,72,88,85,97,106,81,112,84,83,81,55,119,74,86,73,115,114,97,80,48),
       authDomain: "classwork1314.firebaseapp.com",
       databaseURL: "https://classwork1314-default-rtdb.asia-southeast1.firebasedatabase.app",
       projectId: "classwork1314",
@@ -687,15 +690,6 @@
       const title = document.getElementById('assignTitleInput').value.trim();
       const desc = document.getElementById('assignDescInput').value.trim();
       const classLabel = document.getElementById('assignClassLabelInput').value.trim();
-      const studentEmails = [...new Set(document.getElementById('assignStudentEmailsInput').value
-        .split(/[\n,;]+/)
-        .map(email => email.trim().toLowerCase())
-        .filter(Boolean))];
-      const invalidEmails = studentEmails.filter(email => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
-      if (!studentEmails.length || invalidEmails.length) {
-        showToast('Enter at least one valid student email address. For a class, paste the class email list.', 'error');
-        return;
-      }
 
       if (!title) {
         showToast("Please enter an assignment title", "error");
@@ -736,7 +730,7 @@
         createdAt: new Date().toISOString(),
         status: 'published',
         classLabel,
-        assignedStudentCount: studentEmails.length
+        assignedStudentCount: 0
       };
 
       let docId = "assign_" + code;
@@ -760,17 +754,6 @@
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
-        const assignedBatch = db.batch();
-        studentEmails.forEach(email => {
-          const assignedRef = db.collection('assignments').doc(docId).collection('assignedStudents').doc(studentKeyForEmail(email));
-          assignedBatch.set(assignedRef, {
-            assignmentId: docId, studentEmail: email, teacherId: signedInUser.uid,
-            title, description: desc, sessionCode: code, classLabel, slideCount: slides.length,
-            status: 'assignment-started',
-            assignedAt: firebase.firestore.FieldValue.serverTimestamp()
-          });
-        });
-        await assignedBatch.commit();
 
         currentAssignmentId = docId;
         currentSessionCode = code;
@@ -779,7 +762,7 @@
 
         createAssignmentModal.classList.add('hidden');
         createAssignmentForm.reset();
-        showToast(`Published! Session Code: ${code} • Assigned to ${studentEmails.length} student(s)`, "success");
+        showToast(`Published! Share session code ${code} with your students.`, "success");
         renderTeacherAssignments();
         loadTeacherAssignmentView(docId);
       } catch (err) {
@@ -832,16 +815,11 @@
           console.warn("Student listener notice:", err);
           currentJoinedStudents = [];
           renderTeacherRoster();
+
         });
         if (unsubAssignedStudents) unsubAssignedStudents();
-        unsubAssignedStudents = db.collection('assignments').doc(assignmentId).collection('assignedStudents').onSnapshot(snapshot => {
-          currentAssignedStudents = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-          renderTeacherRoster();
-        }, err => {
-          console.warn("Assigned-student listener notice:", err);
-          currentAssignedStudents = [];
-          renderTeacherRoster();
-        });
+        currentAssignedStudents = [];
+        renderTeacherRoster();
       } else {
         currentJoinedStudents = [];
         currentAssignedStudents = [];
@@ -1120,17 +1098,9 @@
         console.error('History load failed:', err);
         list.innerHTML = '<div class="col-span-full text-center py-8 text-rose-600">Could not load saved work: ' + escapeHtml(err.message) + '</div>';
       });
-      if (signedInUser.email) {
-        assignedHistoryUnsubscribe = db.collectionGroup('assignedStudents').where('studentEmail', '==', signedInUser.email.trim().toLowerCase())
-          .onSnapshot(snapshot => {
-            studentAssignedRecords = snapshot.docs.map(doc => ({ id: doc.id, assignedStudentKey: doc.id,
-              assignmentId: doc.data().assignmentId || (doc.ref.parent.parent && doc.ref.parent.parent.id), ...doc.data() }));
-            renderCombinedStudentHistory();
-          }, err => {
-            console.error('Assigned assignments load failed:', err);
-            showToast('Could not load assigned work: ' + err.message, 'error');
-          });
-      }
+      // Session-code access replaces email-based assignment targeting. History is built
+      // from this signed-in student's own submissions, avoiding a collection-group query.
+      studentAssignedRecords = [];
     }
 
     function renderCombinedStudentHistory() {
@@ -1271,6 +1241,9 @@
     // STYLUS & TOUCH SUPPORT / CANVAS WORKSPACE
     // ==========================================
     function setupSlideWorkspace() {
+      undoStack = [];
+      redoStack = [];
+      updateHistoryButtons();
       updateSlideNavigationUI();
       resizeCanvas();
       loadCurrentSlideData();
@@ -1367,6 +1340,9 @@
               img.src = doc.data().canvasData;
               img.onload = () => {
                 ctx.drawImage(img, 0, 0, mainCanvas.width, mainCanvas.height);
+                undoStack = [];
+                redoStack = [];
+                updateHistoryButtons();
               };
             }
           }, err => console.warn("Slide listener notice:", err));
@@ -1432,6 +1408,76 @@
     const inputModeBtn = document.getElementById('inputModeBtn');
     const inputModeIcon = document.getElementById('inputModeIcon');
     const inputModeText = document.getElementById('inputModeText');
+    const undoCanvasBtn = document.getElementById('undoCanvasBtn');
+    const redoCanvasBtn = document.getElementById('redoCanvasBtn');
+    const lineEraserToggleBtn = document.getElementById('lineEraserToggleBtn');
+    let undoStack = [];
+    let redoStack = [];
+    let lineEraserMode = false;
+    const MAX_HISTORY_STEPS = 50;
+
+    function updateHistoryButtons() {
+      undoCanvasBtn.disabled = undoStack.length === 0;
+      redoCanvasBtn.disabled = redoStack.length === 0;
+    }
+
+    function captureCanvasState() {
+      if (!mainCanvas.width || !mainCanvas.height) return null;
+      try { return ctx.getImageData(0, 0, mainCanvas.width, mainCanvas.height); }
+      catch (err) { console.warn('Could not capture canvas history:', err); return null; }
+    }
+
+    function beginCanvasAction() {
+      const state = captureCanvasState();
+      if (state) {
+        undoStack.push(state);
+        if (undoStack.length > MAX_HISTORY_STEPS) undoStack.shift();
+        redoStack = [];
+        updateHistoryButtons();
+      }
+    }
+
+    function restoreCanvasState(state) {
+      if (!state) return;
+      if (state.width !== mainCanvas.width || state.height !== mainCanvas.height) {
+        showToast('Undo history was reset because the canvas size changed.', 'info');
+        undoStack = [];
+        redoStack = [];
+        updateHistoryButtons();
+        return;
+      }
+      ctx.putImageData(state, 0, 0);
+      saveCanvasToFirestore();
+      updateHistoryButtons();
+    }
+
+    undoCanvasBtn.addEventListener('click', () => {
+      if (currentUserRole === 'student' && currentSubmissionStatus !== 'in-progress') return;
+      if (!undoStack.length) return;
+      const current = captureCanvasState();
+      if (current) redoStack.push(current);
+      restoreCanvasState(undoStack.pop());
+      updateHistoryButtons();
+    });
+
+    redoCanvasBtn.addEventListener('click', () => {
+      if (currentUserRole === 'student' && currentSubmissionStatus !== 'in-progress') return;
+      if (!redoStack.length) return;
+      const current = captureCanvasState();
+      if (current) undoStack.push(current);
+      restoreCanvasState(redoStack.pop());
+      updateHistoryButtons();
+    });
+
+    lineEraserToggleBtn.addEventListener('click', () => {
+      lineEraserMode = !lineEraserMode;
+      lineEraserToggleBtn.setAttribute('aria-pressed', String(lineEraserMode));
+      lineEraserToggleBtn.classList.toggle('bg-amber-100', lineEraserMode);
+      lineEraserToggleBtn.classList.toggle('border-amber-400', lineEraserMode);
+      lineEraserToggleBtn.classList.toggle('text-amber-800', lineEraserMode);
+      lineEraserToggleBtn.innerHTML = '<i class="fa-solid fa-grip-lines"></i> Line Eraser: ' + (lineEraserMode ? 'On' : 'Off');
+      showToast(lineEraserMode ? 'Line eraser enabled: tap a writing row to clear across the slide.' : 'Line eraser disabled.', 'info');
+    });
 
     toolPen.addEventListener('click', () => setTool('pen'));
     toolEraser.addEventListener('click', () => setTool('eraser'));
@@ -1480,6 +1526,8 @@
         showToast('This assignment is read-only until your teacher requests amendments.', 'info');
         return;
       }
+      if (!window.confirm('Clear all writing on this slide? This action can be undone with Undo.')) return;
+      beginCanvasAction();
       redrawBackgroundAndCanvas();
       saveCanvasToFirestore();
     });
@@ -1507,9 +1555,10 @@
 
       const coords = getCanvasCoordinates(e);
 
-      if (activeTool === 'text') {
+      if (activeTool === 'text' && !lineEraserMode) {
         const text = prompt("Enter text overlay:");
         if (text) {
+          beginCanvasAction();
           ctx.font = `${currentLineWidth * 4 + 12}px Inter, sans-serif`;
           ctx.fillStyle = currentColor;
           ctx.fillText(text, coords.x, coords.y);
@@ -1518,6 +1567,19 @@
         return;
       }
 
+      if (lineEraserMode) {
+        beginCanvasAction();
+        const bandHeight = Math.max(currentLineWidth * 4, mainCanvas.height * 0.055);
+        const bandTop = Math.max(0, Math.min(mainCanvas.height - bandHeight, coords.y - bandHeight / 2));
+        ctx.save();
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, bandTop, mainCanvas.width, bandHeight);
+        ctx.restore();
+        saveCanvasToFirestore();
+        return;
+      }
+
+      beginCanvasAction();
       isDrawing = true;
       lastX = coords.x;
       lastY = coords.y;

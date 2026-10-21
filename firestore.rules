@@ -113,7 +113,7 @@ service cloud.firestore {
         && request.resource.data.teacherId == request.auth.uid
         && request.resource.data.sessionCode is string
         && request.resource.data.assignedStudentCount is int
-        && request.resource.data.assignedStudentCount > 0;
+&& request.resource.data.assignedStudentCount == 0;
 
       allow update: if ownsAssignment(assignmentId)
         && request.resource.data.teacherId == resource.data.teacherId
@@ -172,8 +172,8 @@ service cloud.firestore {
           && exists(/databases/$(database)/documents/assignments/$(assignmentId))
           && (
             (
-              exists(/databases/$(database)/documents/assignments/$(assignmentId)/assignedStudents/$(request.auth.token.email))
-              && get(/databases/$(database)/documents/assignments/$(assignmentId)/assignedStudents/$(request.auth.token.email)).data.studentEmail == request.auth.token.email
+              exists(/databases/$(database)/documents/assignmentLookups/$(request.resource.data.sessionCode))
+              && get(/databases/$(database)/documents/assignmentLookups/$(request.resource.data.sessionCode)).data.assignmentId == assignmentId
             )
             || ownsAssignment(assignmentId)
           );
