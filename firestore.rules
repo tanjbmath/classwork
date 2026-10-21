@@ -134,7 +134,7 @@ service cloud.firestore {
           && request.resource.data.status == 'assignment-started'
           && request.resource.data.keys().hasOnly([
             'assignmentId', 'studentEmail', 'teacherId', 'title', 'description',
-            'sessionCode', 'classLabel', 'status', 'assignedAt'
+            'sessionCode', 'classLabel', 'slideCount', 'status', 'assignedAt'
           ]);
 
         allow update: if (
