@@ -172,8 +172,8 @@ service cloud.firestore {
           && exists(/databases/$(database)/documents/assignments/$(assignmentId))
           && (
             (
-              exists(/databases/$(database)/documents/assignments/$(assignmentId)/assignedStudents/$(request.auth.token.email))
-              && get(/databases/$(database)/documents/assignments/$(assignmentId)/assignedStudents/$(request.auth.token.email)).data.studentEmail == request.auth.token.email
+              exists(/databases/$(database)/documents/assignmentLookups/$(request.resource.data.sessionCode))
+              && get(/databases/$(database)/documents/assignmentLookups/$(request.resource.data.sessionCode)).data.assignmentId == assignmentId
             )
             || ownsAssignment(assignmentId)
           );
