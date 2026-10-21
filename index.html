@@ -66,8 +66,24 @@
     <!-- 1. ROLE SELECTION SCREEN -->
     <div id="roleSelectionScreen" class="max-w-2xl mx-auto my-12 bg-white rounded-2xl shadow-xl p-8 border border-slate-200">
       <div class="text-center mb-8">
-        <h2 class="text-3xl font-extrabold text-slate-800">Welcome to Live Canvas</h2>
-        <p class="text-slate-500 mt-2">Select your role to start creating or completing interactive assignments</p>
+        <h2 class="text-3xl font-extrabold text-slate-800">Welcome to Classwork</h2>
+        <p class="text-slate-500 mt-2">Sign in with Google to access your assignments and saved work.</p>
+      </div>
+      <div id="signedOutPanel" class="mb-6 text-center">
+        <button id="googleSignInBtn" class="mx-auto bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-5 py-3 rounded-xl font-semibold shadow-sm flex items-center justify-center gap-3">
+          <i class="fa-brands fa-google text-lg"></i> Continue with Google
+        </button>
+        <p class="text-xs text-slate-500 mt-3">Your work is saved to your account so you can return on another device.</p>
+      </div>
+      <div id="signedInPanel" class="hidden mb-6 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+        <div class="flex items-center gap-3">
+          <img id="accountPhoto" class="w-10 h-10 rounded-full hidden" alt="Account photo">
+          <div class="flex-1 min-w-0">
+            <div id="accountName" class="font-semibold truncate"></div>
+            <div id="accountEmail" class="text-xs text-slate-500 truncate"></div>
+          </div>
+          <button id="signOutBtn" class="text-sm text-rose-600 hover:text-rose-700 font-medium">Sign out</button>
+        </div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -81,7 +97,7 @@
         </button>
 
         <!-- Student Select -->
-        <button id="selectStudentBtn" class="p-6 bg-emerald-50 hover:bg-emerald-100 border-2 border-emerald-200 hover:border-emerald-500 rounded-xl transition-all text-left flex flex-col items-center justify-center text-center group shadow-sm hover:shadow-md">
+        <button id="selectStudentBtn" disabled class="p-6 bg-emerald-50 hover:bg-emerald-100 border-2 border-emerald-200 hover:border-emerald-500 rounded-xl transition-all text-left flex flex-col items-center justify-center text-center group shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
           <div class="w-16 h-16 bg-emerald-600 text-white rounded-full flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform">
             <i class="fa-solid fa-graduation-cap"></i>
           </div>
@@ -149,6 +165,25 @@
       </div>
 
     </div>
+
+    <!-- STUDENT WORK HISTORY -->
+    <section id="studentHistoryScreen" class="hidden space-y-6">
+      <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 class="text-2xl font-bold text-slate-800">My Past Work</h2>
+          <p class="text-sm text-slate-500">Reopen an assignment to continue where you left off.</p>
+        </div>
+        <button id="historyJoinAssignmentBtn" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-lg font-semibold"><i class="fa-solid fa-plus mr-2"></i>Join assignment</button>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="bg-white p-4 rounded-xl border border-slate-200"><div class="text-sm text-slate-500">Assignments started</div><div id="historyTotalCount" class="text-2xl font-bold mt-1">0</div></div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200"><div class="text-sm text-slate-500">In progress</div><div id="historyProgressCount" class="text-2xl font-bold mt-1">0</div></div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200"><div class="text-sm text-slate-500">Completed</div><div id="historyCompletedCount" class="text-2xl font-bold mt-1">0</div></div>
+      </div>
+      <div id="studentHistoryList" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="col-span-full text-center py-12 text-slate-400 bg-white rounded-xl border border-slate-200"><i class="fa-solid fa-folder-open text-3xl mb-3"></i><p>Your saved assignments will appear here.</p></div>
+      </div>
+    </section>
 
     <!-- 3. STUDENT JOIN / WORKSPACE -->
     <!-- Join Form -->
@@ -315,25 +350,72 @@
     let db = null;
     let auth = null;
     let isFirebaseReady = false;
+    let signedInUser = null;
+    let historyUnsubscribe = null;
+    const googleProvider = new firebase.auth.GoogleAuthProvider();
 
     try {
       firebase.initializeApp(firebaseConfig);
       db = firebase.firestore();
       auth = firebase.auth();
-
-      auth.signInAnonymously().then(() => {
+      auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(err => console.warn("Auth persistence:", err));
+      auth.onAuthStateChanged(async user => {
+        signedInUser = user || null;
         isFirebaseReady = true;
-        document.getElementById('connectionBadge').innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Firestore Connected`;
-        console.log("Firebase Auth & Firestore initialized successfully.");
-      }).catch(err => {
-        console.warn("Auth warning:", err);
-        isFirebaseReady = true;
+        const signedOut = document.getElementById('signedOutPanel');
+        const signedIn = document.getElementById('signedInPanel');
+        const studentBtn = document.getElementById('selectStudentBtn');
+        if (user) {
+          signedOut.classList.add('hidden');
+          signedIn.classList.remove('hidden');
+          document.getElementById('accountName').textContent = user.displayName || 'Student';
+          document.getElementById('accountEmail').textContent = user.email || '';
+          const photo = document.getElementById('accountPhoto');
+          if (user.photoURL) { photo.src = user.photoURL; photo.classList.remove('hidden'); }
+          else photo.classList.add('hidden');
+          studentBtn.disabled = false;
+          document.getElementById('connectionBadge').innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400"></span> Signed in';
+          try {
+            await db.collection('users').doc(user.uid).set({
+              displayName: user.displayName || '',
+              email: user.email || '',
+              photoURL: user.photoURL || '',
+              lastSignInAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+          } catch (err) { console.warn('Profile sync notice:', err); }
+          renderStudentHistory();
+        } else {
+          signedOut.classList.remove('hidden');
+          signedIn.classList.add('hidden');
+          studentBtn.disabled = true;
+          document.getElementById('connectionBadge').innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-400"></span> Sign in required';
+          if (historyUnsubscribe) { historyUnsubscribe(); historyUnsubscribe = null; }
+          studentHistoryScreen.classList.add('hidden');
+          studentJoinScreen.classList.add('hidden');
+          workspaceScreen.classList.add('hidden');
+          teacherDashboard.classList.add('hidden');
+          roleSelectionScreen.classList.remove('hidden');
+        }
       });
     } catch (err) {
       console.error("Firebase init failed:", err);
-      document.getElementById('connectionBadge').innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-400"></span> Offline Mode`;
+      document.getElementById('connectionBadge').innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-400"></span> Offline Mode';
       showToast("Firebase initialization notice: " + err.message, "error");
     }
+
+    document.getElementById('googleSignInBtn').addEventListener('click', async () => {
+      try { await auth.signInWithPopup(googleProvider); }
+      catch (err) {
+        if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user') {
+          try { await auth.signInWithRedirect(googleProvider); }
+          catch (redirectErr) { showToast('Google sign-in failed: ' + redirectErr.message, 'error'); }
+        } else showToast('Google sign-in failed: ' + err.message, 'error');
+      }
+    });
+    document.getElementById('signOutBtn').addEventListener('click', async () => {
+      try { await auth.signOut(); resetRole(); }
+      catch (err) { showToast('Could not sign out: ' + err.message, 'error'); }
+    });
 
     function getStoredAssignments() {
       try {
@@ -387,6 +469,7 @@
     const roleSelectionScreen = document.getElementById('roleSelectionScreen');
     const teacherDashboard = document.getElementById('teacherDashboard');
     const studentJoinScreen = document.getElementById('studentJoinScreen');
+    const studentHistoryScreen = document.getElementById('studentHistoryScreen');
     const workspaceScreen = document.getElementById('workspaceScreen');
     const roleBadge = document.getElementById('roleBadge');
     const resetRoleBtn = document.getElementById('resetRoleBtn');
@@ -397,11 +480,18 @@
 
     document.getElementById('selectTeacherBtn').addEventListener('click', () => switchRole('teacher'));
     document.getElementById('selectStudentBtn').addEventListener('click', () => switchRole('student'));
+    document.getElementById('historyJoinAssignmentBtn').addEventListener('click', () => {
+      if (!signedInUser) return showToast('Sign in first.', 'error');
+      studentHistoryScreen.classList.add('hidden');
+      studentJoinScreen.classList.remove('hidden');
+    });
     resetRoleBtn.addEventListener('click', resetRole);
 
     function switchRole(role) {
+      if (!signedInUser) { showToast('Sign in with Google first.', 'error'); return; }
       currentUserRole = role;
       roleSelectionScreen.classList.add('hidden');
+      studentHistoryScreen.classList.add('hidden');
       resetRoleBtn.classList.remove('hidden');
 
       if (role === 'teacher') {
@@ -411,7 +501,9 @@
       } else {
         roleBadge.textContent = "Student Mode";
         roleBadge.className = "bg-emerald-800 text-emerald-100 px-3 py-1 rounded-full font-medium shadow-inner";
-        studentJoinScreen.classList.remove('hidden');
+        studentJoinScreen.classList.add('hidden');
+        studentHistoryScreen.classList.remove('hidden');
+        renderStudentHistory();
       }
     }
 
@@ -427,6 +519,7 @@
 
       teacherDashboard.classList.add('hidden');
       studentJoinScreen.classList.add('hidden');
+      studentHistoryScreen.classList.add('hidden');
       workspaceScreen.classList.add('hidden');
       document.getElementById('teacherActiveSection').classList.add('hidden');
       
@@ -541,12 +634,20 @@
       publishBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> <span>Publishing...</span>`;
 
       const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+      if (!signedInUser) {
+        showToast('Sign in before creating assignments.', 'error');
+        publishBtn.disabled = false;
+        publishBtn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> <span>Publish Assignment</span>';
+        return;
+      }
       const newAssignment = {
         title,
         description: desc,
+        teacherId: signedInUser.uid,
         sessionCode: code,
         slides: slides,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        status: 'published'
       };
 
       let docId = "assign_" + code;
@@ -691,12 +792,6 @@
       setupSlideWorkspace();
     }
 
-    document.getElementById('exitWorkspaceBtn').addEventListener('click', () => {
-      workspaceScreen.classList.add('hidden');
-      teacherDashboard.classList.remove('hidden');
-      inspectingStudentId = null;
-    });
-
     // ==========================================
     // STUDENT JOIN & MATCHING
     // ==========================================
@@ -707,6 +802,10 @@
       const name = document.getElementById('studentNameInput').value.trim();
       const joinBtn = document.getElementById('joinBtn');
 
+      if (!signedInUser) {
+        showToast("Sign in with Google before joining an assignment.", "error");
+        return;
+      }
       if (!inputCode || !name) {
         showToast("Please provide both code and student name", "error");
         return;
@@ -753,22 +852,45 @@
       currentAssignmentId = matchedDocId;
       currentSessionCode = inputCode;
 
-      studentName = name;
-      studentId = "st_" + Date.now();
+      studentName = signedInUser.displayName || name;
+      studentId = signedInUser.uid;
 
       if (db && matchedDocId) {
-        db.collection('assignments').doc(matchedDocId)
-          .collection('students').doc(studentId).set({
-            name: name,
-            joinedAt: firebase.firestore.FieldValue.serverTimestamp()
-          }).catch(e => console.warn("Student record write notice:", e));
+        try {
+          const now = firebase.firestore.FieldValue.serverTimestamp();
+          await db.collection('assignments').doc(matchedDocId)
+            .collection('students').doc(studentId).set({
+              uid: studentId,
+              name: studentName,
+              email: signedInUser.email || '',
+              joinedAt: now,
+              lastWorkedAt: now
+            }, { merge: true });
+          await db.collection('users').doc(studentId).collection('submissions').doc(matchedDocId).set({
+            assignmentId: matchedDocId,
+            title: matchedData.title || 'Assignment',
+            description: matchedData.description || '',
+            sessionCode: inputCode,
+            status: 'in-progress',
+            startedAt: now,
+            lastWorkedAt: now,
+            slideCount: (matchedData.slides || []).length
+          }, { merge: true });
+        } catch (err) {
+          console.error('Could not create submission:', err);
+          showToast('Could not save your assignment record. Check Firestore rules and try again.', 'error');
+          joinBtn.disabled = false;
+          joinBtn.innerHTML = '<span>Start Working</span> <i class="fa-solid fa-arrow-right"></i>';
+          return;
+        }
       }
 
       studentJoinScreen.classList.add('hidden');
+      studentHistoryScreen.classList.add('hidden');
       workspaceScreen.classList.remove('hidden');
       document.getElementById('exitWorkspaceBtn').classList.add('hidden');
       document.getElementById('workspaceTitle').textContent = currentAssignmentData.title || "Interactive Assignment";
-      document.getElementById('workspaceSubtext').textContent = `Student: ${name} (Stylus & Touch Active)`;
+      document.getElementById('workspaceSubtext').textContent = `Student: ${studentName} (Stylus & Touch Active)`;
 
       currentSlideIndex = 0;
       setupSlideWorkspace();
@@ -776,6 +898,89 @@
 
       joinBtn.disabled = false;
       joinBtn.innerHTML = `<span>Start Working</span> <i class="fa-solid fa-arrow-right"></i>`;
+    });
+
+    // ==========================================
+    // STUDENT HISTORY / REOPEN SAVED WORK
+    // ==========================================
+    function renderStudentHistory() {
+      if (!signedInUser || !db) return;
+      if (historyUnsubscribe) historyUnsubscribe();
+      const list = document.getElementById('studentHistoryList');
+      list.innerHTML = '<div class="col-span-full text-center py-8 text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading saved work...</div>';
+      historyUnsubscribe = db.collection('users').doc(signedInUser.uid).collection('submissions')
+        .orderBy('lastWorkedAt', 'desc')
+        .onSnapshot(snapshot => {
+          const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          document.getElementById('historyTotalCount').textContent = items.length;
+          document.getElementById('historyProgressCount').textContent = items.filter(x => x.status !== 'completed').length;
+          document.getElementById('historyCompletedCount').textContent = items.filter(x => x.status === 'completed').length;
+          if (!items.length) {
+            list.innerHTML = '<div class="col-span-full text-center py-12 text-slate-400 bg-white rounded-xl border border-slate-200"><i class="fa-solid fa-folder-open text-3xl mb-3"></i><p>No saved assignments yet. Join an assignment using your teacher’s code.</p></div>';
+            return;
+          }
+          list.innerHTML = '';
+          items.forEach(item => {
+            const card = document.createElement('article');
+            card.className = 'bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col gap-3';
+            const date = item.lastWorkedAt && item.lastWorkedAt.toDate ? item.lastWorkedAt.toDate().toLocaleString() : 'Recently';
+            const status = item.status === 'completed' ? 'Completed' : 'In progress';
+            card.innerHTML = '<div class="flex items-start justify-between gap-3"><div class="min-w-0"><h3 class="font-bold text-slate-800 break-words"></h3><p class="text-sm text-slate-500 mt-1"></p></div><span class="text-xs rounded-full px-2 py-1 bg-emerald-50 text-emerald-700 whitespace-nowrap"></span></div><div class="text-xs text-slate-400"></div><button class="reopen-work-btn w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg py-2.5 font-semibold"><i class="fa-solid fa-rotate-right mr-2"></i>Reopen work</button>';
+            card.querySelector('h3').textContent = item.title || 'Untitled assignment';
+            card.querySelector('p').textContent = (item.slideCount || 1) + ' slides';
+            card.querySelector('span').textContent = status;
+            card.querySelector('.text-xs.text-slate-400').textContent = 'Last worked: ' + date;
+            card.querySelector('button').addEventListener('click', () => reopenSavedAssignment(item.id, item));
+            list.appendChild(card);
+          });
+        }, err => {
+          console.error('History load failed:', err);
+          list.innerHTML = '<div class="col-span-full text-center py-8 text-rose-600">Could not load history. Check Firestore rules and required indexes.</div>';
+        });
+    }
+
+    async function reopenSavedAssignment(assignmentId, submission) {
+      if (!signedInUser) return showToast('Sign in first.', 'error');
+      try {
+        const doc = await db.collection('assignments').doc(assignmentId).get();
+        if (!doc.exists) {
+          showToast('This assignment is no longer available.', 'error');
+          return;
+        }
+        currentAssignmentData = doc.data();
+        currentAssignmentId = assignmentId;
+        currentSessionCode = currentAssignmentData.sessionCode || submission.sessionCode || '';
+        studentId = signedInUser.uid;
+        studentName = signedInUser.displayName || 'Student';
+        inspectingStudentId = null;
+        currentUserRole = 'student';
+        studentHistoryScreen.classList.add('hidden');
+        studentJoinScreen.classList.add('hidden');
+        roleSelectionScreen.classList.add('hidden');
+        workspaceScreen.classList.remove('hidden');
+        document.getElementById('exitWorkspaceBtn').classList.remove('hidden');
+        document.getElementById('exitWorkspaceBtn').textContent = 'Back to My Work';
+        document.getElementById('workspaceTitle').textContent = currentAssignmentData.title || 'Assignment';
+        document.getElementById('workspaceSubtext').textContent = 'Your saved work • Auto-saves to your account';
+        currentSlideIndex = 0;
+        setupSlideWorkspace();
+      } catch (err) {
+        console.error('Reopen failed:', err);
+        showToast('Could not reopen assignment: ' + err.message, 'error');
+      }
+    }
+
+    document.getElementById('exitWorkspaceBtn').addEventListener('click', () => {
+      workspaceScreen.classList.add('hidden');
+      if (inspectingStudentId) {
+        teacherDashboard.classList.remove('hidden');
+        inspectingStudentId = null;
+      } else if (currentUserRole === 'student') {
+        studentHistoryScreen.classList.remove('hidden');
+        document.getElementById('exitWorkspaceBtn').textContent = 'Back to Dashboard';
+      } else {
+        teacherDashboard.classList.remove('hidden');
+      }
     });
 
     // ==========================================
@@ -893,16 +1098,41 @@
       if (!currentAssignmentId || !targetStudentId) return;
 
       clearTimeout(saveTimeout);
-      saveTimeout = setTimeout(() => {
+      saveTimeout = setTimeout(async () => {
         const dataUrl = mainCanvas.toDataURL();
-        if (db) {
-          db.collection('assignments').doc(currentAssignmentId)
-            .collection('students').doc(targetStudentId)
-            .collection('slides').doc(`slide_${currentSlideIndex}`)
-            .set({
-              canvasData: dataUrl,
-              updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            }, { merge: true }).catch(err => console.warn("Canvas save notice:", err));
+        if (db && inspectingStudentId) {
+          showToast('Teacher inspection is read-only in this version.', 'info');
+          return;
+        }
+        if (db && signedInUser && targetStudentId === signedInUser.uid) {
+          try {
+            const now = firebase.firestore.FieldValue.serverTimestamp();
+            await db.collection('assignments').doc(currentAssignmentId)
+              .collection('students').doc(targetStudentId)
+              .collection('slides').doc(`slide_${currentSlideIndex}`)
+              .set({
+                canvasData: dataUrl,
+                updatedAt: now
+              }, { merge: true });
+            await db.collection('assignments').doc(currentAssignmentId)
+              .collection('students').doc(targetStudentId).set({
+                uid: targetStudentId,
+                name: studentName || signedInUser.displayName || 'Student',
+                lastWorkedAt: now
+              }, { merge: true });
+            await db.collection('users').doc(targetStudentId).collection('submissions').doc(currentAssignmentId).set({
+              assignmentId: currentAssignmentId,
+              title: currentAssignmentData.title || 'Assignment',
+              description: currentAssignmentData.description || '',
+              sessionCode: currentSessionCode || currentAssignmentData.sessionCode || '',
+              status: 'in-progress',
+              lastWorkedAt: now,
+              slideCount: (currentAssignmentData.slides || []).length
+            }, { merge: true });
+          } catch (err) {
+            console.error('Canvas save failed:', err);
+            showToast('Save failed. Your latest drawing may not be stored.', 'error');
+          }
         }
       }, 300);
     }
