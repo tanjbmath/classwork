@@ -1,0 +1,74 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // A teacher role must be assigned by a trusted administrator in the
+    // Firebase console. Never let users grant themselves this role.
+    function isTeacher() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher';
+    }
+
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isTeacher();
+
+      // Users can maintain their own profile, but cannot create or change role.
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasOnly([
+          'displayName', 'email', 'photoURL', 'lastSignInAt'
+        ]);
+
+      allow update: if isOwner(uid)
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.keys().hasOnly([
+          'displayName', 'email', 'photoURL', 'lastSignInAt', 'role'
+        ]);
+
+      allow delete: if false;
+
+      match /submissions/{assignmentId} {
+        allow read: if isOwner(uid) || isTeacher();
+        allow create, update: if isOwner(uid)
+          && request.resource.data.assignmentId == assignmentId;
+        allow delete: if false;
+      }
+    }
+
+    match /assignments/{assignmentId} {
+      // Authenticated users may discover an assignment by its session code.
+      allow read: if signedIn();
+      allow create: if isTeacher()
+        && request.resource.data.teacherId == request.auth.uid;
+      allow update: if isTeacher()
+        && resource.data.teacherId == request.auth.uid;
+      allow delete: if isTeacher()
+        && resource.data.teacherId == request.auth.uid;
+
+      match /students/{studentUid} {
+        allow read: if isOwner(studentUid) || isTeacher();
+        allow create, update: if isOwner(studentUid)
+          || (isTeacher()
+            && get(/databases/$(database)/documents/assignments/$(assignmentId)).data.teacherId == request.auth.uid);
+        allow delete: if isTeacher()
+          && get(/databases/$(database)/documents/assignments/$(assignmentId)).data.teacherId == request.auth.uid;
+
+        match /slides/{slideId} {
+          allow read: if isOwner(studentUid) || isTeacher();
+          allow create, update: if isOwner(studentUid)
+            || (isTeacher()
+              && get(/databases/$(database)/documents/assignments/$(assignmentId)).data.teacherId == request.auth.uid);
+          allow delete: if isTeacher()
+            && get(/databases/$(database)/documents/assignments/$(assignmentId)).data.teacherId == request.auth.uid;
+        }
+      }
+    }
+  }
+}
