@@ -230,6 +230,10 @@
             <p id="workspaceSubtext" class="text-xs text-slate-500">Stylus & Touch enabled • Auto-saves live</p>
           </div>
           <button id="submitAssignmentBtn" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">Submit assignment</button>
+          <div id="teacherReviewActions" class="hidden flex flex-wrap gap-2">
+            <button id="teacherMarkCompletedBtn" type="button" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-semibold">Mark Completed</button>
+            <button id="teacherRequestAmendmentsBtn" type="button" class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-2 rounded-lg text-sm font-semibold">Request Amendments</button>
+          </div>
         </div>
 
         <!-- Slide Navigation -->
@@ -927,7 +931,7 @@
             ${student.status === 'submitted' ? '<button type="button" class="mark-completed-btn bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-lg font-semibold">Completed</button><button type="button" class="amendments-btn bg-amber-500 hover:bg-amber-600 text-white text-xs px-3 py-2 rounded-lg font-semibold">Amendments Needed</button>' : ''}
           </div>`;
         const inspect = card.querySelector('.inspect-student-btn');
-        if (inspect) inspect.addEventListener('click', e => { e.stopPropagation(); openWorkspaceForInspection(student.studentUid || student.id, displayName); });
+        if (inspect) inspect.addEventListener('click', e => { e.stopPropagation(); openWorkspaceForInspection(student.studentUid || student.id, displayName, student.status, student); });
         const completed = card.querySelector('.mark-completed-btn');
         if (completed) completed.addEventListener('click', e => { e.stopPropagation(); setStudentReviewStatus(student, 'completed'); });
         const amendments = card.querySelector('.amendments-btn');
@@ -961,14 +965,18 @@
       }
     }
 
-    function openWorkspaceForInspection(stId, stName) {
+    function openWorkspaceForInspection(stId, stName, status = 'submitted', studentRecord = null) {
       inspectingStudentId = stId;
+      currentSubmissionStatus = status || 'submitted';
+      window.currentInspectedStudentRecord = studentRecord || { studentUid: stId, id: stId, status: currentSubmissionStatus };
       teacherDashboard.classList.add('hidden');
       workspaceScreen.classList.remove('hidden');
 
       document.getElementById('exitWorkspaceBtn').classList.remove('hidden');
       document.getElementById('workspaceTitle').textContent = `Inspecting: ${stName}`;
-      document.getElementById('workspaceSubtext').textContent = "Drawings live-sync with the student canvas";
+      document.getElementById('workspaceSubtext').textContent = "Teacher annotations live-sync to the student's canvas";
+      document.getElementById('teacherReviewActions').classList.toggle('hidden', currentSubmissionStatus !== 'submitted');
+      updateSubmitAssignmentButton();
 
       currentSlideIndex = 0;
       setupSlideWorkspace();
@@ -1163,6 +1171,24 @@
       button.disabled = false;
       button.textContent = 'Submit assignment';
     }
+
+    document.getElementById('teacherMarkCompletedBtn').addEventListener('click', async () => {
+      const record = window.currentInspectedStudentRecord;
+      if (!record) return;
+      await setStudentReviewStatus(record, 'completed');
+      currentSubmissionStatus = 'completed';
+      document.getElementById('teacherReviewActions').classList.add('hidden');
+      document.getElementById('workspaceSubtext').textContent = "Completed • Teacher annotations remain visible to the student";
+    });
+
+    document.getElementById('teacherRequestAmendmentsBtn').addEventListener('click', async () => {
+      const record = window.currentInspectedStudentRecord;
+      if (!record) return;
+      await setStudentReviewStatus(record, 'in-progress');
+      currentSubmissionStatus = 'in-progress';
+      document.getElementById('teacherReviewActions').classList.add('hidden');
+      document.getElementById('workspaceSubtext').textContent = "Amendments requested • Teacher annotations live-sync to the student";
+    });
 
     document.getElementById('submitAssignmentBtn').addEventListener('click', async () => {
       if (!signedInUser || !currentAssignmentId || currentSubmissionStatus !== 'in-progress') return;
@@ -1360,8 +1386,17 @@
       clearTimeout(saveTimeout);
       saveTimeout = setTimeout(async () => {
         const dataUrl = mainCanvas.toDataURL();
-        if (db && inspectingStudentId) {
-          showToast('Teacher inspection is read-only in this version.', 'info');
+        if (db && inspectingStudentId && currentUserRole === 'teacher') {
+          try {
+            const now = firebase.firestore.FieldValue.serverTimestamp();
+            await db.collection('assignments').doc(currentAssignmentId)
+              .collection('students').doc(targetStudentId)
+              .collection('slides').doc(`slide_${currentSlideIndex}`)
+              .set({ canvasData: dataUrl, updatedAt: now, teacherAnnotatedAt: now, teacherAnnotatedBy: signedInUser?.uid || null }, { merge: true });
+          } catch (err) {
+            console.error('Teacher annotation save failed:', err);
+            showToast('Could not save teacher annotation: ' + err.message, 'error');
+          }
           return;
         }
         if (db && signedInUser && targetStudentId === signedInUser.uid && currentSubmissionStatus === 'in-progress') {
