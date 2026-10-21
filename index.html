@@ -759,7 +759,7 @@
           const assignedRef = db.collection('assignments').doc(docId).collection('assignedStudents').doc(studentKeyForEmail(email));
           assignedBatch.set(assignedRef, {
             assignmentId: docId, studentEmail: email, teacherId: signedInUser.uid,
-            title, description: desc, sessionCode: code, classLabel,
+            title, description: desc, sessionCode: code, classLabel, slideCount: slides.length,
             status: 'assignment-started',
             assignedAt: firebase.firestore.FieldValue.serverTimestamp()
           });
