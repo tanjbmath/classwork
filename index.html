@@ -1015,7 +1015,8 @@
       });
       currentJoinedStudents.forEach(student => {
         const email = (student.email || '').toLowerCase();
-        if (!email || !assignedEmails.has(email)) roster.push({ ...student, studentUid: student.id, isJoined: true, status: 'in-progress' });
+        // Preserve the persisted Firestore status so submitted students retain review actions.
+        if (!email || !assignedEmails.has(email)) roster.push({ ...student, studentUid: student.id, isJoined: true, status: student.status || 'in-progress' });
       });
       renderStudentGrid(roster);
     }
