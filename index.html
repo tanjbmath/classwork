@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Classkick Interactive Canvas</title>
+  <title>STEP — Small Tasks Equal Progress</title>
   
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -35,11 +35,17 @@
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col">
 
-  <header class="bg-indigo-600 text-white shadow-md sticky top-0 z-40">
+  <header class="bg-slate-900 text-white shadow-md sticky top-0 z-40">
     <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-2">
       <div class="flex items-center space-x-3">
-        <i class="fa-solid fa-chalkboard-user text-2xl text-indigo-200"></i>
-        <h1 class="text-xl font-bold tracking-tight">Classkick Live Canvas</h1>
+        <div class="flex items-baseline gap-1.5" role="img" aria-label="STEP — Small Tasks Equal Progress" title="Small Tasks Equal Progress">
+          <h1 class="flex items-baseline gap-1 font-bold tracking-tight">
+            <span class="text-2xl leading-none">S<em class="text-[10px] font-normal">mall</em></span>
+            <span class="text-2xl leading-none">T<em class="text-[10px] font-normal">asks</em></span>
+            <span class="text-2xl leading-none">E<em class="text-[10px] font-normal">qual</em></span>
+            <span class="text-2xl leading-none">P<em class="text-[10px] font-normal">rogress</em></span>
+          </h1>
+        </div>
       </div>
       <div class="flex items-center gap-3">
         <span id="connectionBadge" class="bg-emerald-700 text-emerald-100 text-xs px-2.5 py-1 rounded-full font-medium flex items-center gap-1.5 shadow-inner">
@@ -66,7 +72,7 @@
     <!-- 1. ROLE SELECTION SCREEN -->
     <div id="roleSelectionScreen" class="max-w-2xl mx-auto my-12 bg-white rounded-2xl shadow-xl p-8 border border-slate-200">
       <div class="text-center mb-8">
-        <h2 class="text-3xl font-extrabold text-slate-800">Welcome to Classwork</h2>
+        <h2 class="text-3xl font-extrabold text-slate-800">Welcome to STEP</h2>
         <p class="text-slate-500 mt-2">Sign in with Google to access your assignments and saved work.</p>
       </div>
       <div id="signedOutPanel" class="mb-6 text-center">
