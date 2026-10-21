@@ -35,7 +35,12 @@ service cloud.firestore {
 
       // Users cannot add, change, or remove the role field themselves.
       allow update: if isOwner(uid)
-        && request.resource.data.role == resource.data.role
+        && (
+          ('role' in resource.data
+            && 'role' in request.resource.data
+            && request.resource.data.role == resource.data.role)
+          || (!('role' in resource.data) && !('role' in request.resource.data))
+        )
         && request.resource.data.keys().hasOnly([
           'displayName', 'email', 'photoURL', 'lastSignInAt', 'role'
         ]);
