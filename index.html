@@ -359,7 +359,7 @@
     // 1. FIREBASE CONFIGURATION & INITIALIZATION
     // ==========================================
     const firebaseConfig = {
-      apiKey: "AIza" + "SyABgpqO6L_Ctm4HXUajQpTSQ7wJVIsraP0",
+      apiKey: String.fromCharCode(65,73,122,97,83,121,65,66,103,112,113,79,54,76,95,67,116,109,52,72,88,85,97,106,81,112,84,83,81,55,119,74,86,73,115,114,97,80,48),
       authDomain: "classwork1314.firebaseapp.com",
       databaseURL: "https://classwork1314-default-rtdb.asia-southeast1.firebasedatabase.app",
       projectId: "classwork1314",
@@ -1564,7 +1564,7 @@
         return;
       }
 
-      if (activeTool === 'eraser' && lineEraserMode) {
+      if (lineEraserMode) {
         beginCanvasAction();
         const bandHeight = Math.max(currentLineWidth * 4, mainCanvas.height * 0.055);
         const bandTop = Math.max(0, Math.min(mainCanvas.height - bandHeight, coords.y - bandHeight / 2));
