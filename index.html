@@ -1639,8 +1639,17 @@
 
       clearTimeout(saveTimeout);
       saveTimeout = setTimeout(async () => {
+        // JPEG does not support transparency. Export through a white-backed buffer
+        // so transparent canvas areas never become black after saving or clearing.
+        const exportCanvas = document.createElement('canvas');
+        exportCanvas.width = mainCanvas.width;
+        exportCanvas.height = mainCanvas.height;
+        const exportCtx = exportCanvas.getContext('2d');
+        exportCtx.fillStyle = '#ffffff';
+        exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+        exportCtx.drawImage(mainCanvas, 0, 0);
         // Preserve photo detail while using JPEG compression to limit Firestore payload size.
-        const dataUrl = mainCanvas.toDataURL('image/jpeg', 0.92);
+        const dataUrl = exportCanvas.toDataURL('image/jpeg', 0.92);
         if (db && inspectingStudentId && currentUserRole === 'teacher') {
           try {
             const now = firebase.firestore.FieldValue.serverTimestamp();
