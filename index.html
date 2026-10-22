@@ -714,8 +714,19 @@
           ${slideConfigCount > 1 ? `<button type="button" class="text-rose-500 hover:text-rose-700 text-xs font-semibold remove-slide-btn"><i class="fa-solid fa-trash"></i> Remove</button>` : ''}
         </div>
         <div>
-          <label class="block text-xs font-medium text-slate-600 mb-1">Slide Prompt / Question Text</label>
-          <input type="text" class="slide-prompt-input w-full px-3 py-1.5 text-sm border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500" placeholder="e.g. Draw a fraction representing 3/4 or solve: 12 x 4">
+          <label class="block text-xs font-medium text-slate-600 mb-1">Question</label>
+          <input type="text" class="slide-prompt-input w-full px-3 py-1.5 text-sm border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500" placeholder="Enter the question (optional if using an image)">
+        </div>
+        <div class="space-y-2">
+          <label class="block text-xs font-medium text-slate-600">Question Image (Optional)</label>
+          <div class="flex flex-wrap items-center gap-2">
+            <button type="button" class="select-question-image-btn bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 px-3 py-1.5 rounded-lg text-sm font-medium"><i class="fa-solid fa-images"></i> Add Image</button>
+            <span class="question-image-name text-xs text-slate-500">No image selected</span>
+            <button type="button" class="remove-question-image-btn hidden text-xs text-rose-600 hover:text-rose-700 font-medium">Remove image</button>
+          </div>
+          <input type="file" class="question-image-input hidden" accept="image/*" aria-label="Choose a question image from device">
+          <img class="question-image-preview hidden max-h-40 max-w-full rounded border border-slate-200 object-contain" alt="Question image preview">
+          <p class="text-xs text-slate-500">Choose a picture or worksheet from your device. It will appear as the slide background for students.</p>
         </div>
         <div>
           <label class="block text-xs font-medium text-slate-600 mb-1">Background Image URL (Optional)</label>
@@ -725,6 +736,39 @@
 
       slidesConfigContainer.appendChild(slideDiv);
 
+      const imageInput = slideDiv.querySelector('.question-image-input');
+      const imageName = slideDiv.querySelector('.question-image-name');
+      const imagePreview = slideDiv.querySelector('.question-image-preview');
+      const removeImageBtn = slideDiv.querySelector('.remove-question-image-btn');
+      slideDiv._questionImageFile = null;
+
+      slideDiv.querySelector('.select-question-image-btn').addEventListener('click', () => {
+        imageInput.value = '';
+        imageInput.click();
+      });
+      imageInput.addEventListener('change', () => {
+        const file = imageInput.files && imageInput.files[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) {
+          showToast('Please choose a valid image file.', 'error');
+          imageInput.value = '';
+          return;
+        }
+        slideDiv._questionImageFile = file;
+        imageName.textContent = file.name;
+        imagePreview.src = URL.createObjectURL(file);
+        imagePreview.classList.remove('hidden');
+        removeImageBtn.classList.remove('hidden');
+      });
+      removeImageBtn.addEventListener('click', () => {
+        slideDiv._questionImageFile = null;
+        imageInput.value = '';
+        imageName.textContent = 'No image selected';
+        imagePreview.removeAttribute('src');
+        imagePreview.classList.add('hidden');
+        removeImageBtn.classList.add('hidden');
+      });
+
       const removeBtn = slideDiv.querySelector('.remove-slide-btn');
       if (removeBtn) {
         removeBtn.addEventListener('click', () => {
@@ -732,6 +776,37 @@
           reindexSlideConfigs();
         });
       }
+    }
+
+    function compressQuestionImage(file) {
+      return new Promise((resolve, reject) => {
+        const objectUrl = URL.createObjectURL(file);
+        const image = new Image();
+        image.onload = () => {
+          try {
+            const maxDimension = 1400;
+            const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+            canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+            const context = canvas.getContext('2d');
+            context.fillStyle = '#ffffff';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            context.drawImage(image, 0, 0, canvas.width, canvas.height);
+            URL.revokeObjectURL(objectUrl);
+            // Compress uploaded question images to reduce Firestore assignment document size.
+            resolve(canvas.toDataURL('image/jpeg', 0.78));
+          } catch (error) {
+            URL.revokeObjectURL(objectUrl);
+            reject(error);
+          }
+        };
+        image.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          reject(new Error('Unable to read question image.'));
+        };
+        image.src = objectUrl;
+      });
     }
 
     function reindexSlideConfigs() {
@@ -757,12 +832,26 @@
       const slideItems = slidesConfigContainer.querySelectorAll('.slide-config-item');
       const slides = [];
 
-      slideItems.forEach(item => {
-        slides.push({
-          prompt: item.querySelector('.slide-prompt-input').value.trim(),
-          bgUrl: item.querySelector('.slide-bg-input').value.trim()
-        });
-      });
+      try {
+        for (const item of slideItems) {
+          const prompt = item.querySelector('.slide-prompt-input').value.trim();
+          const bgUrl = item.querySelector('.slide-bg-input').value.trim();
+          let questionImageUrl = '';
+          if (item._questionImageFile) {
+            questionImageUrl = await compressQuestionImage(item._questionImageFile);
+          }
+          slides.push({
+            prompt,
+            bgUrl: questionImageUrl || bgUrl
+          });
+        }
+      } catch (err) {
+        console.error('Question image processing failed:', err);
+        showToast('Could not process a question image. Please try a smaller image.', 'error');
+        publishBtn.disabled = false;
+        publishBtn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> <span>Publish Assignment</span>';
+        return;
+      }
 
       if (slides.length === 0) {
         showToast("Add at least one slide", "error");
