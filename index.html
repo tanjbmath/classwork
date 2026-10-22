@@ -2276,12 +2276,15 @@
       ctx.moveTo(lastX, lastY);
       ctx.lineTo(coords.x, coords.y);
 
+      // Keep the visible stroke thickness constant while the canvas is zoomed.
+      // CSS scales the canvas visually, so compensate in canvas coordinates.
+      const zoomCompensatedWidth = currentLineWidth / canvasZoom;
       if (activeTool === 'eraser') {
         ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = currentLineWidth * 4;
+        ctx.lineWidth = (currentLineWidth * 4) / canvasZoom;
       } else {
         ctx.strokeStyle = currentColor;
-        ctx.lineWidth = currentLineWidth;
+        ctx.lineWidth = zoomCompensatedWidth;
       }
 
       ctx.lineCap = 'round';
