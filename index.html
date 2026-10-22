@@ -1844,6 +1844,9 @@
           .collection('students').doc(targetStudentId)
           .collection('slides').doc(`slide_${currentSlideIndex}`)
           .onSnapshot(doc => {
+            // A live Firestore echo must never repaint the canvas mid-stroke:
+            // doing so can make the line being drawn appear to vanish.
+            if (isDrawing) return;
             redrawBackgroundAndCanvas();
             if (doc.exists && doc.data().canvasData) {
               const img = new Image();
@@ -2229,8 +2232,7 @@
     }, { passive: true });
     canvasWrapper.addEventListener('touchcancel', resetTwoFingerGesture, { passive: true });
 
-    function getCanvasCoordinates(e) {
-      const rect = canvasWrapper.getBoundingClientRect();
+    function getCanvasCoordinates(e, rect = canvasWrapper.getBoundingClientRect()) {
       return {
         x: ((e.clientX - rect.left - canvasPanX) / canvasZoom) * (mainCanvas.width / canvasWrapper.clientWidth),
         y: ((e.clientY - rect.top - canvasPanY) / canvasZoom) * (mainCanvas.height / canvasWrapper.clientHeight)
@@ -2278,29 +2280,32 @@
 
       e.preventDefault();
 
-      const coords = getCanvasCoordinates(e);
+      // Process coalesced pointer samples where supported for smoother handwriting,
+      // while measuring the wrapper only once per browser event.
+      const rect = canvasWrapper.getBoundingClientRect();
+      const samples = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [];
+      const points = samples.length ? samples : [e];
 
-      ctx.beginPath();
-      ctx.moveTo(lastX, lastY);
-      ctx.lineTo(coords.x, coords.y);
-
-      // Keep the visible stroke thickness constant while the canvas is zoomed.
-      // CSS scales the canvas visually, so compensate in canvas coordinates.
-      const zoomCompensatedWidth = currentLineWidth / canvasZoom;
+      // Keep visible stroke thickness constant at every zoom level.
       if (activeTool === 'eraser') {
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = (currentLineWidth * 4) / canvasZoom;
       } else {
         ctx.strokeStyle = currentColor;
-        ctx.lineWidth = zoomCompensatedWidth;
+        ctx.lineWidth = currentLineWidth / canvasZoom;
       }
-
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
-      ctx.stroke();
 
-      lastX = coords.x;
-      lastY = coords.y;
+      for (const point of points) {
+        const coords = getCanvasCoordinates(point, rect);
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(coords.x, coords.y);
+        ctx.stroke();
+        lastX = coords.x;
+        lastY = coords.y;
+      }
     }
 
     function handlePointerUp(e) {
