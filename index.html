@@ -150,13 +150,20 @@
           <div class="bg-indigo-800/80 backdrop-blur border border-indigo-700 px-6 py-3 rounded-lg text-center flex flex-col items-center gap-2">
             <div class="text-xs text-indigo-300 uppercase tracking-wider font-semibold">Session Code</div>
             <div id="currentSessionCode" class="text-3xl font-extrabold tracking-widest text-emerald-400 select-all">------</div>
-            <div class="flex gap-2 mt-1">
+            <div class="flex flex-wrap justify-center gap-2 mt-1">
               <button id="copyCodeBtn" class="bg-indigo-700 hover:bg-indigo-600 text-xs px-3 py-1 rounded text-indigo-100 transition flex items-center gap-1 font-medium">
                 <i class="fa-regular fa-copy"></i> Copy Code
+              </button>
+              <button id="copyAssignmentLinkBtn" class="bg-sky-600 hover:bg-sky-500 text-xs px-3 py-1 rounded text-white transition flex items-center gap-1 font-medium">
+                <i class="fa-solid fa-link"></i> Copy Student Link
               </button>
               <button id="quickTestJoinBtn" class="bg-emerald-600 hover:bg-emerald-500 text-xs px-3 py-1 rounded text-white transition flex items-center gap-1 font-medium">
                 <i class="fa-solid fa-vial"></i> Test Join
               </button>
+            </div>
+            <div class="w-full max-w-sm text-left mt-1">
+              <label for="assignmentStudentLink" class="block text-[11px] text-indigo-200 mb-1">Share this link with students</label>
+              <input id="assignmentStudentLink" readonly class="w-full bg-indigo-950/60 border border-indigo-700 rounded px-2 py-1.5 text-xs text-indigo-100" value="">
             </div>
           </div>
         </div>
@@ -450,6 +457,16 @@
             roleBadge.className = 'bg-emerald-800 text-emerald-100 px-3 py-1 rounded-full font-medium shadow-inner';
           }
           renderStudentHistory();
+
+          // A shared assignment link opens the student join form automatically after sign-in.
+          const requestedJoinCode = new URLSearchParams(window.location.search).get('join');
+          if (requestedJoinCode && !window.__stepJoinLinkHandled) {
+            window.__stepJoinLinkHandled = true;
+            document.getElementById('joinCodeInput').value = requestedJoinCode.trim().toUpperCase();
+            const nameInput = document.getElementById('studentNameInput');
+            if (!nameInput.value.trim()) nameInput.value = user.displayName || '';
+            await switchRole('student');
+          }
         } else {
           signedOut.classList.remove('hidden');
           signedIn.classList.add('hidden');
@@ -794,12 +811,41 @@
     // ==========================================
     // TEACHER LIVE MONITORING
     // ==========================================
+    function getAssignmentStudentLink() {
+      const code = currentAssignmentData?.sessionCode || currentSessionCode;
+      if (!code) return '';
+      const url = new URL(window.location.href);
+      url.search = '';
+      url.hash = '';
+      url.searchParams.set('join', code);
+      return url.toString();
+    }
+
+    function updateAssignmentStudentLink() {
+      const input = document.getElementById('assignmentStudentLink');
+      if (input) input.value = getAssignmentStudentLink();
+    }
+
+    document.getElementById('copyAssignmentLinkBtn').addEventListener('click', async () => {
+      const link = getAssignmentStudentLink();
+      if (!link) return showToast('No assignment link is available yet.', 'error');
+      try {
+        await navigator.clipboard.writeText(link);
+        showToast('Student assignment link copied.', 'success');
+      } catch (err) {
+        const input = document.getElementById('assignmentStudentLink');
+        if (input) { input.focus(); input.select(); }
+        showToast('Select and copy the student link shown below.', 'info');
+      }
+    });
+
     function loadTeacherAssignmentView(assignmentId) {
       document.getElementById('teacherActiveSection').classList.remove('hidden');
 
       document.getElementById('currentAssignmentTitle').textContent = currentAssignmentData.title;
       document.getElementById('currentAssignmentDesc').textContent = currentAssignmentData.description || 'No instructions provided.';
       document.getElementById('currentSessionCode').textContent = currentAssignmentData.sessionCode;
+      updateAssignmentStudentLink();
 
       if (db) {
         // Backfill a limited lookup record when a teacher opens an existing assignment.
@@ -822,6 +868,7 @@
           document.getElementById('currentAssignmentTitle').textContent = currentAssignmentData.title;
           document.getElementById('currentAssignmentDesc').textContent = currentAssignmentData.description || 'No instructions provided.';
           document.getElementById('currentSessionCode').textContent = currentAssignmentData.sessionCode;
+          updateAssignmentStudentLink();
         }, err => console.warn("Snapshot notice:", err));
 
         if (unsubStudents) unsubStudents();
@@ -1120,6 +1167,10 @@
       currentSlideIndex = 0;
       setupSlideWorkspace();
     }
+
+    // Pre-fill the session code immediately when a student opens a shared link.
+    const initialJoinCode = new URLSearchParams(window.location.search).get('join');
+    if (initialJoinCode) document.getElementById('joinCodeInput').value = initialJoinCode.trim().toUpperCase();
 
     // ==========================================
     // STUDENT JOIN & MATCHING
