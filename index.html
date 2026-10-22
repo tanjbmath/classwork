@@ -2154,43 +2154,72 @@
     document.getElementById('canvasZoomOutBtn').addEventListener('click', () => setCanvasZoom(canvasZoom - 0.25));
     document.getElementById('canvasZoomResetBtn').addEventListener('click', resetCanvasZoom);
 
-    // Two-finger pinch zoom for touchscreens. One-finger/stylus input remains available for writing.
+    // Two-finger gestures support both pinch-to-zoom and drag-to-pan.
+    // One-finger/stylus input remains available for writing.
     let pinchStartDistance = 0;
     let pinchStartZoom = 1;
-    let pinchMidpoint = null;
+    let pinchStartMidpoint = null;
+    let pinchStartPanX = 0;
+    let pinchStartPanY = 0;
+
+    function getTwoFingerGesture(e) {
+      const p1 = e.touches[0], p2 = e.touches[1];
+      const rect = canvasWrapper.getBoundingClientRect();
+      return {
+        distance: Math.hypot(p2.clientX - p1.clientX, p2.clientY - p1.clientY),
+        midpoint: {
+          x: (p1.clientX + p2.clientX) / 2 - rect.left,
+          y: (p1.clientY + p2.clientY) / 2 - rect.top
+        }
+      };
+    }
+
+    function resetTwoFingerGesture() {
+      pinchStartDistance = 0;
+      pinchStartMidpoint = null;
+    }
+
     canvasWrapper.addEventListener('touchstart', e => {
       if (e.touches.length === 2) {
         e.preventDefault();
-        const rect = canvasWrapper.getBoundingClientRect();
-        const p1 = e.touches[0], p2 = e.touches[1];
-        pinchStartDistance = Math.hypot(p2.clientX - p1.clientX, p2.clientY - p1.clientY);
+        const gesture = getTwoFingerGesture(e);
+        pinchStartDistance = Math.max(1, gesture.distance);
         pinchStartZoom = canvasZoom;
-        pinchMidpoint = { x: (p1.clientX + p2.clientX) / 2 - rect.left, y: (p1.clientY + p2.clientY) / 2 - rect.top };
+        pinchStartMidpoint = gesture.midpoint;
+        pinchStartPanX = canvasPanX;
+        pinchStartPanY = canvasPanY;
         isDrawing = false;
       }
     }, { passive: false });
 
     canvasWrapper.addEventListener('touchmove', e => {
-      if (e.touches.length !== 2 || !pinchStartDistance || !pinchMidpoint) return;
+      if (e.touches.length !== 2 || !pinchStartDistance || !pinchStartMidpoint) return;
       e.preventDefault();
-      const p1 = e.touches[0], p2 = e.touches[1];
-      const distance = Math.hypot(p2.clientX - p1.clientX, p2.clientY - p1.clientY);
-      const rect = canvasWrapper.getBoundingClientRect();
-      const mid = { x: (p1.clientX + p2.clientX) / 2 - rect.left, y: (p1.clientY + p2.clientY) / 2 - rect.top };
-      const nextZoom = Math.max(MIN_CANVAS_ZOOM, Math.min(MAX_CANVAS_ZOOM, pinchStartZoom * distance / pinchStartDistance));
-      // Follow the pinch midpoint as well as scaling around it.
-      const contentX = (pinchMidpoint.x - canvasPanX) / canvasZoom;
-      const contentY = (pinchMidpoint.y - canvasPanY) / canvasZoom;
+      const gesture = getTwoFingerGesture(e);
+      const nextZoom = Math.max(
+        MIN_CANVAS_ZOOM,
+        Math.min(MAX_CANVAS_ZOOM, pinchStartZoom * gesture.distance / pinchStartDistance)
+      );
+
+      // Keep the original canvas point under the fingers' moving midpoint.
+      // If finger spacing stays the same, this becomes two-finger panning.
+      const contentX = (pinchStartMidpoint.x - pinchStartPanX) / pinchStartZoom;
+      const contentY = (pinchStartMidpoint.y - pinchStartPanY) / pinchStartZoom;
       canvasZoom = nextZoom;
-      canvasPanX = mid.x - contentX * canvasZoom;
-      canvasPanY = mid.y - contentY * canvasZoom;
-      if (canvasZoom === 1) { canvasPanX = 0; canvasPanY = 0; }
+      canvasPanX = gesture.midpoint.x - contentX * canvasZoom;
+      canvasPanY = gesture.midpoint.y - contentY * canvasZoom;
+
+      if (canvasZoom === 1) {
+        canvasPanX = 0;
+        canvasPanY = 0;
+      }
       applyCanvasZoom();
     }, { passive: false });
 
     canvasWrapper.addEventListener('touchend', e => {
-      if (e.touches.length < 2) { pinchStartDistance = 0; pinchMidpoint = null; }
+      if (e.touches.length < 2) resetTwoFingerGesture();
     }, { passive: true });
+    canvasWrapper.addEventListener('touchcancel', resetTwoFingerGesture, { passive: true });
 
     function getCanvasCoordinates(e) {
       const rect = canvasWrapper.getBoundingClientRect();
