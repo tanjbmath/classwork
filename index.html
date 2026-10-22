@@ -306,6 +306,11 @@
             <button id="redoCanvasBtn" type="button" title="Redo last undone action" disabled class="bg-white hover:bg-slate-100 disabled:opacity-40 text-slate-700 border border-slate-200 px-3 py-1.5 rounded-lg text-sm font-medium transition"><i class="fa-solid fa-rotate-right"></i> Redo</button>
           </div>
           <button id="lineEraserToggleBtn" type="button" aria-pressed="false" title="Toggle erasing an entire horizontal writing line" class="bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 px-3 py-1.5 rounded-lg text-sm font-medium transition"><i class="fa-solid fa-grip-lines"></i> Line Eraser: Off</button>
+          <!-- Capture and attach a photo from the phone camera -->
+          <button id="capturePhotoBtn" type="button" title="Take a photo and add it to this slide" class="bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 px-3 py-1.5 rounded-lg text-sm font-medium transition">
+            <i class="fa-solid fa-camera"></i> Add Photo
+          </button>
+          <input id="capturePhotoInput" type="file" accept="image/*" capture="environment" class="hidden" aria-label="Take a photo to add to the assignment">
           <!-- Clear Canvas -->
           <button id="clearCanvasBtn" class="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-3 py-1.5 rounded-lg text-sm font-medium transition">
             <i class="fa-solid fa-trash-can"></i> Clear
@@ -1582,7 +1587,8 @@
 
       clearTimeout(saveTimeout);
       saveTimeout = setTimeout(async () => {
-        const dataUrl = mainCanvas.toDataURL();
+        // JPEG keeps camera photos compact enough for Firestore's document size limit.
+        const dataUrl = mainCanvas.toDataURL('image/jpeg', 0.82);
         if (db && inspectingStudentId && currentUserRole === 'teacher') {
           try {
             const now = firebase.firestore.FieldValue.serverTimestamp();
@@ -1752,6 +1758,65 @@
         toolText.classList.remove('bg-white', 'text-slate-700');
       }
     }
+
+    const capturePhotoBtn = document.getElementById('capturePhotoBtn');
+    const capturePhotoInput = document.getElementById('capturePhotoInput');
+
+    capturePhotoBtn.addEventListener('click', () => {
+      if (currentUserRole === 'student' && currentSubmissionStatus !== 'in-progress') {
+        showToast('This assignment is read-only until your teacher requests amendments.', 'info');
+        return;
+      }
+      if (!currentAssignmentId) {
+        showToast('Open an assignment before adding a photo.', 'info');
+        return;
+      }
+      capturePhotoInput.value = '';
+      capturePhotoInput.click();
+    });
+
+    capturePhotoInput.addEventListener('change', (event) => {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      if (!file.type.startsWith('image/')) {
+        showToast('Please capture or choose an image.', 'error');
+        return;
+      }
+
+      const imageUrl = URL.createObjectURL(file);
+      const photo = new Image();
+      photo.onload = () => {
+        try {
+          beginCanvasAction();
+
+          // Fit the photo within the slide while preserving its aspect ratio.
+          const padding = Math.max(12, Math.min(mainCanvas.width, mainCanvas.height) * 0.04);
+          const maxWidth = Math.max(1, mainCanvas.width - padding * 2);
+          const maxHeight = Math.max(1, mainCanvas.height - padding * 2);
+          const scale = Math.min(maxWidth / photo.naturalWidth, maxHeight / photo.naturalHeight);
+          const drawWidth = photo.naturalWidth * scale;
+          const drawHeight = photo.naturalHeight * scale;
+          const drawX = (mainCanvas.width - drawWidth) / 2;
+          const drawY = (mainCanvas.height - drawHeight) / 2;
+
+          ctx.drawImage(photo, drawX, drawY, drawWidth, drawHeight);
+          saveCanvasToFirestore();
+          showToast('Photo added to this slide and will be saved with the student’s work.', 'success');
+        } catch (err) {
+          console.error('Photo insertion failed:', err);
+          showToast('Could not add this photo. Please try again.', 'error');
+        } finally {
+          URL.revokeObjectURL(imageUrl);
+          capturePhotoInput.value = '';
+        }
+      };
+      photo.onerror = () => {
+        URL.revokeObjectURL(imageUrl);
+        capturePhotoInput.value = '';
+        showToast('Could not open that photo. Please try again.', 'error');
+      };
+      photo.src = imageUrl;
+    });
 
     document.getElementById('clearCanvasBtn').addEventListener('click', () => {
       if (currentUserRole === 'student' && currentSubmissionStatus !== 'in-progress') {
