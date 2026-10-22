@@ -310,7 +310,7 @@
             <button id="undoCanvasBtn" type="button" title="Undo last writing action" disabled class="bg-white hover:bg-slate-100 disabled:opacity-40 text-slate-700 border border-slate-200 px-3 py-1.5 rounded-lg text-sm font-medium transition"><i class="fa-solid fa-rotate-left"></i> Undo</button>
             <button id="redoCanvasBtn" type="button" title="Redo last undone action" disabled class="bg-white hover:bg-slate-100 disabled:opacity-40 text-slate-700 border border-slate-200 px-3 py-1.5 rounded-lg text-sm font-medium transition"><i class="fa-solid fa-rotate-right"></i> Redo</button>
           </div>
-          <button id="lineEraserToggleBtn" type="button" aria-pressed="false" title="Toggle erasing an entire horizontal writing line" class="bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 px-3 py-1.5 rounded-lg text-sm font-medium transition"><i class="fa-solid fa-grip-lines"></i> Line Eraser: Off</button>
+          <button id="lineEraserToggleBtn" type="button" aria-pressed="false" title="Tap a written stroke to erase its connected pixels" class="bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 px-3 py-1.5 rounded-lg text-sm font-medium transition"><i class="fa-solid fa-eraser"></i> Stroke Eraser: Off</button>
           <!-- Capture and attach a photo from the phone camera -->
           <button id="capturePhotoBtn" type="button" title="Take a photo and add it to this slide" class="bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 px-3 py-1.5 rounded-lg text-sm font-medium transition">
             <i class="fa-solid fa-camera"></i> Add Photo
@@ -1773,8 +1773,8 @@
       lineEraserToggleBtn.classList.toggle('bg-amber-100', lineEraserMode);
       lineEraserToggleBtn.classList.toggle('border-amber-400', lineEraserMode);
       lineEraserToggleBtn.classList.toggle('text-amber-800', lineEraserMode);
-      lineEraserToggleBtn.innerHTML = '<i class="fa-solid fa-grip-lines"></i> Line Eraser: ' + (lineEraserMode ? 'On' : 'Off');
-      showToast(lineEraserMode ? 'Line eraser enabled: tap a writing row to clear across the slide.' : 'Line eraser disabled.', 'info');
+      lineEraserToggleBtn.innerHTML = '<i class="fa-solid fa-eraser"></i> Stroke Eraser: ' + (lineEraserMode ? 'On' : 'Off');
+      showToast(lineEraserMode ? 'Stroke eraser enabled: tap a written stroke to erase it.' : 'Stroke eraser disabled.', 'info');
     });
 
     toolPen.addEventListener('click', () => setTool('pen'));
@@ -1972,6 +1972,66 @@
       };
     }
 
+    // Erase a connected ink stroke by flood-filling pixels similar to the tapped pixel.
+    // This keeps unrelated nearby writing and photographic areas intact in typical use.
+    function eraseConnectedStroke(x, y) {
+      const px = Math.max(0, Math.min(mainCanvas.width - 1, Math.round(x)));
+      const py = Math.max(0, Math.min(mainCanvas.height - 1, Math.round(y)));
+      const image = ctx.getImageData(0, 0, mainCanvas.width, mainCanvas.height);
+      const data = image.data;
+      const width = image.width, height = image.height;
+      const start = (py * width + px) * 4;
+      const seed = [data[start], data[start + 1], data[start + 2]];
+      const seedLuma = (seed[0] + seed[1] + seed[2]) / 3;
+
+      // Ignore near-white/transparent pixels: they are not ink.
+      if (data[start + 3] < 40 || seedLuma > 238) {
+        showToast('Tap directly on a written stroke to erase it.', 'info');
+        return;
+      }
+
+      beginCanvasAction();
+      const visited = new Uint8Array(width * height);
+      const queue = new Int32Array(Math.min(width * height, 500000));
+      let head = 0, tail = 0;
+      const startPixel = py * width + px;
+      queue[tail++] = startPixel;
+      visited[startPixel] = 1;
+      let erased = 0;
+      const maxPixels = Math.max(300, Math.floor(width * height * 0.035));
+      const tolerance = 72;
+
+      while (head < tail && erased < maxPixels) {
+        const p = queue[head++];
+        const i = p * 4;
+        const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
+        if (a < 40 || ((Math.abs(r - seed[0]) + Math.abs(g - seed[1]) + Math.abs(b - seed[2])) > tolerance * 3)) continue;
+        // Avoid treating bright paper/background as part of the stroke.
+        if ((r + g + b) / 3 > 238) continue;
+        data[i] = 255; data[i + 1] = 255; data[i + 2] = 255; data[i + 3] = 255;
+        erased++;
+        const neighbors = [p - width, p + width, p - 1, p + 1];
+        for (let k = 0; k < 4; k++) {
+          const n = neighbors[k];
+          if (n < 0 || n >= width * height || visited[n]) continue;
+          if ((k === 2 && p % width === 0) || (k === 3 && p % width === width - 1)) continue;
+          visited[n] = 1;
+          if (tail < queue.length) queue[tail++] = n;
+        }
+      }
+
+      if (!erased) {
+        // No matching ink pixels found; discard the history entry created above.
+        undoStack.pop();
+        updateHistoryButtons();
+        showToast('Could not identify that stroke. Try tapping a darker part of it.', 'info');
+        return;
+      }
+      ctx.putImageData(image, 0, 0);
+      saveCanvasToFirestore();
+      showToast('Stroke erased.', 'success');
+    }
+
     // Advanced Pointer Events for Stylus / Apple Pencil + Palm Rejection Toggle
     function handlePointerDown(e) {
       if (currentUserRole === 'student' && currentSubmissionStatus !== 'in-progress') {
@@ -1998,20 +2058,7 @@
       }
 
       if (lineEraserMode) {
-        beginCanvasAction();
-        const bandHeight = Math.max(currentLineWidth * 4, mainCanvas.height * 0.055);
-        const bandTop = Math.max(0, Math.min(mainCanvas.height - bandHeight, coords.y - bandHeight / 2));
-        ctx.save();
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, bandTop, mainCanvas.width, bandHeight);
-        ctx.restore();
-        saveCanvasToFirestore();
-
-        // Treat line erasing as a one-shot action so the next pointer gesture can write.
-        lineEraserMode = false;
-        lineEraserToggleBtn.setAttribute('aria-pressed', 'false');
-        lineEraserToggleBtn.classList.remove('bg-amber-100', 'border-amber-400', 'text-amber-800');
-        lineEraserToggleBtn.innerHTML = '<i class="fa-solid fa-grip-lines"></i> Line Eraser: Off';
+        eraseConnectedStroke(coords.x, coords.y);
         return;
       }
 
