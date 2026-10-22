@@ -1568,8 +1568,12 @@
       const tempCtx = tempCanvas.getContext('2d');
       tempCtx.drawImage(mainCanvas, 0, 0);
 
-      mainCanvas.width = rect.width;
-      mainCanvas.height = rect.height;
+      // Use a higher-resolution backing canvas so camera photos and handwriting
+      // remain legible on high-density phone screens. Pointer coordinates already
+      // scale from CSS pixels to the canvas's internal pixel dimensions.
+      const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+      mainCanvas.width = Math.round(rect.width * pixelRatio);
+      mainCanvas.height = Math.round(rect.height * pixelRatio);
       applyCanvasZoom();
 
       redrawBackgroundAndCanvas();
@@ -1635,8 +1639,8 @@
 
       clearTimeout(saveTimeout);
       saveTimeout = setTimeout(async () => {
-        // JPEG keeps camera photos compact enough for Firestore's document size limit.
-        const dataUrl = mainCanvas.toDataURL('image/jpeg', 0.82);
+        // Preserve photo detail while using JPEG compression to limit Firestore payload size.
+        const dataUrl = mainCanvas.toDataURL('image/jpeg', 0.92);
         if (db && inspectingStudentId && currentUserRole === 'teacher') {
           try {
             const now = firebase.firestore.FieldValue.serverTimestamp();
