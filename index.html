@@ -310,11 +310,15 @@
             <button id="undoCanvasBtn" type="button" title="Undo last writing action" disabled class="bg-white hover:bg-slate-100 disabled:opacity-40 text-slate-700 border border-slate-200 px-3 py-1.5 rounded-lg text-sm font-medium transition"><i class="fa-solid fa-rotate-left"></i> Undo</button>
             <button id="redoCanvasBtn" type="button" title="Redo last undone action" disabled class="bg-white hover:bg-slate-100 disabled:opacity-40 text-slate-700 border border-slate-200 px-3 py-1.5 rounded-lg text-sm font-medium transition"><i class="fa-solid fa-rotate-right"></i> Redo</button>
           </div>
-          <!-- Capture and attach a photo from the phone camera -->
+          <!-- Add an image either from the camera or the device gallery -->
           <button id="capturePhotoBtn" type="button" title="Take a photo and add it to this slide" class="bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 px-3 py-1.5 rounded-lg text-sm font-medium transition">
-            <i class="fa-solid fa-camera"></i> Add Photo
+            <i class="fa-solid fa-camera"></i> Camera
+          </button>
+          <button id="chooseImageBtn" type="button" title="Choose an image from your device" class="bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 px-3 py-1.5 rounded-lg text-sm font-medium transition">
+            <i class="fa-solid fa-images"></i> Gallery
           </button>
           <input id="capturePhotoInput" type="file" accept="image/*" capture="environment" class="hidden" aria-label="Take a photo to add to the assignment">
+          <input id="chooseImageInput" type="file" accept="image/*" class="hidden" aria-label="Choose an image from the device gallery">
           <!-- Clear Canvas -->
           <button id="clearCanvasBtn" class="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-3 py-1.5 rounded-lg text-sm font-medium transition">
             <i class="fa-solid fa-trash-can"></i> Clear
@@ -1808,25 +1812,40 @@
 
     const capturePhotoBtn = document.getElementById('capturePhotoBtn');
     const capturePhotoInput = document.getElementById('capturePhotoInput');
+    const chooseImageBtn = document.getElementById('chooseImageBtn');
+    const chooseImageInput = document.getElementById('chooseImageInput');
 
-    capturePhotoBtn.addEventListener('click', () => {
+    function canAddImageToCanvas() {
       if (currentUserRole === 'student' && currentSubmissionStatus !== 'in-progress') {
         showToast('This assignment is read-only until your teacher requests amendments.', 'info');
-        return;
+        return false;
       }
       if (!currentAssignmentId) {
-        showToast('Open an assignment before adding a photo.', 'info');
-        return;
+        showToast('Open an assignment before adding an image.', 'info');
+        return false;
       }
+      return true;
+    }
+
+    capturePhotoBtn.addEventListener('click', () => {
+      if (!canAddImageToCanvas()) return;
       capturePhotoInput.value = '';
       capturePhotoInput.click();
     });
 
-    capturePhotoInput.addEventListener('change', (event) => {
-      const file = event.target.files && event.target.files[0];
+    chooseImageBtn.addEventListener('click', () => {
+      if (!canAddImageToCanvas()) return;
+      chooseImageInput.value = '';
+      chooseImageInput.click();
+    });
+
+    function handleImageFileChange(event) {
+      const input = event.target;
+      const file = input.files && input.files[0];
       if (!file) return;
       if (!file.type.startsWith('image/')) {
-        showToast('Please capture or choose an image.', 'error');
+        showToast('Please choose a valid image file.', 'error');
+        input.value = '';
         return;
       }
 
@@ -1836,7 +1855,7 @@
         try {
           beginCanvasAction();
 
-          // Fit the photo within the slide while preserving its aspect ratio.
+          // Fit the image within the slide while preserving its aspect ratio.
           const padding = Math.max(12, Math.min(mainCanvas.width, mainCanvas.height) * 0.04);
           const maxWidth = Math.max(1, mainCanvas.width - padding * 2);
           const maxHeight = Math.max(1, mainCanvas.height - padding * 2);
@@ -1848,22 +1867,25 @@
 
           ctx.drawImage(photo, drawX, drawY, drawWidth, drawHeight);
           saveCanvasToFirestore();
-          showToast('Photo added to this slide and will be saved with the student’s work.', 'success');
+          showToast('Image added to this slide and will be saved with the student’s work.', 'success');
         } catch (err) {
-          console.error('Photo insertion failed:', err);
-          showToast('Could not add this photo. Please try again.', 'error');
+          console.error('Image insertion failed:', err);
+          showToast('Could not add this image. Please try again.', 'error');
         } finally {
           URL.revokeObjectURL(imageUrl);
-          capturePhotoInput.value = '';
+          input.value = '';
         }
       };
       photo.onerror = () => {
         URL.revokeObjectURL(imageUrl);
-        capturePhotoInput.value = '';
-        showToast('Could not open that photo. Please try again.', 'error');
+        input.value = '';
+        showToast('Could not open that image. Please try again.', 'error');
       };
       photo.src = imageUrl;
-    });
+    }
+
+    capturePhotoInput.addEventListener('change', handleImageFileChange);
+    chooseImageInput.addEventListener('change', handleImageFileChange);
 
     document.getElementById('clearCanvasBtn').addEventListener('click', () => {
       if (currentUserRole === 'student' && currentSubmissionStatus !== 'in-progress') {
