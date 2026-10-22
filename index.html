@@ -572,8 +572,18 @@
             window.__stepJoinLinkHandled = true;
             document.getElementById('joinCodeInput').value = requestedJoinCode.trim().toUpperCase();
             const nameInput = document.getElementById('studentNameInput');
-            if (!nameInput.value.trim()) nameInput.value = user.displayName || '';
+            if (!nameInput.value.trim()) {
+              nameInput.value = user.displayName || '';
+            }
             await switchRole('student');
+
+            // A shared assignment link should land directly on the join form,
+            // with the code and suggested name visible for confirmation/editing.
+            document.getElementById('studentHistoryScreen').classList.add('hidden');
+            document.getElementById('workspaceScreen').classList.add('hidden');
+            document.getElementById('studentJoinScreen').classList.remove('hidden');
+            document.getElementById('joinCodeInput').value = requestedJoinCode.trim().toUpperCase();
+            nameInput.focus();
           }
         } else {
           signedOut.classList.remove('hidden');
