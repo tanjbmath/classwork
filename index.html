@@ -330,8 +330,11 @@
       <!-- Canvas Box Area -->
       <div class="bg-white rounded-xl shadow-md border border-slate-200 p-4 flex flex-col items-center">
         <div id="slidePromptContainer" class="w-full mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-sm hidden">
-          <span class="font-bold"><i class="fa-solid fa-circle-question text-amber-600 mr-1"></i> Prompt:</span>
+          <span class="font-bold"><i class="fa-solid fa-circle-question text-amber-600 mr-1"></i> Question:</span>
           <span id="slidePromptText">---</span>
+        </div>
+        <div id="questionImageContainer" class="w-full mb-3 hidden">
+          <img id="questionImageDisplay" class="block mx-auto max-w-full max-h-48 sm:max-h-56 object-contain rounded border border-slate-200 bg-white" alt="Question image">
         </div>
 
         <div id="canvasWrapper" class="canvas-container w-full max-w-4xl aspect-[4/3] bg-white border border-slate-300 rounded-lg shadow-inner relative overflow-hidden flex items-center justify-center">
@@ -842,7 +845,8 @@
           }
           slides.push({
             prompt,
-            bgUrl: questionImageUrl || bgUrl
+            questionImage: questionImageUrl,
+            bgUrl
           });
         }
       } catch (err) {
@@ -1622,15 +1626,31 @@
       document.getElementById('prevSlideBtn').disabled = (currentSlideIndex === 0);
       document.getElementById('nextSlideBtn').disabled = (currentSlideIndex === totalSlides - 1);
 
+      const slideConfig = currentAssignmentData?.slides?.[currentSlideIndex];
       const promptContainer = document.getElementById('slidePromptContainer');
       const promptText = document.getElementById('slidePromptText');
-      const currentSlidePrompt = currentAssignmentData?.slides?.[currentSlideIndex]?.prompt;
-
+      const currentSlidePrompt = slideConfig?.prompt;
       if (currentSlidePrompt) {
         promptText.textContent = currentSlidePrompt;
         promptContainer.classList.remove('hidden');
       } else {
         promptContainer.classList.add('hidden');
+      }
+
+      // Display question images above the writing canvas, preserving their aspect ratio.
+      // Older assignments stored uploaded data images in bgUrl; support those without
+      // continuing to render them as a canvas background.
+      const questionImageContainer = document.getElementById('questionImageContainer');
+      const questionImageDisplay = document.getElementById('questionImageDisplay');
+      const legacyImageUrl = typeof slideConfig?.bgUrl === 'string' && slideConfig.bgUrl.startsWith('data:image/')
+        ? slideConfig.bgUrl : '';
+      const questionImageUrl = slideConfig?.questionImage || legacyImageUrl;
+      if (questionImageUrl) {
+        questionImageDisplay.src = questionImageUrl;
+        questionImageContainer.classList.remove('hidden');
+      } else {
+        questionImageDisplay.removeAttribute('src');
+        questionImageContainer.classList.add('hidden');
       }
     }
 
@@ -1681,7 +1701,7 @@
       ctx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
 
       const slideConfig = currentAssignmentData?.slides?.[currentSlideIndex];
-      if (slideConfig?.bgUrl) {
+      if (slideConfig?.bgUrl && !slideConfig.bgUrl.startsWith('data:image/')) {
         if (!currentBgImage || currentBgImage.src !== slideConfig.bgUrl) {
           currentBgImage = new Image();
           currentBgImage.crossOrigin = "anonymous";
