@@ -1620,9 +1620,8 @@
               img.src = doc.data().canvasData;
               img.onload = () => {
                 ctx.drawImage(img, 0, 0, mainCanvas.width, mainCanvas.height);
-                undoStack = [];
-                redoStack = [];
-                updateHistoryButtons();
+                // Keep local undo/redo history when Firestore echoes a saved canvas.
+                // History is reset explicitly in setupSlideWorkspace() when changing slides.
               };
             }
           }, err => console.warn("Slide listener notice:", err));
