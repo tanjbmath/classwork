@@ -575,13 +575,8 @@
             if (!nameInput.value.trim()) {
               nameInput.value = user.displayName || '';
             }
-            await switchRole('student');
-
-            // A shared assignment link should land directly on the join form,
-            // with the code and suggested name visible for confirmation/editing.
-            document.getElementById('studentHistoryScreen').classList.add('hidden');
-            document.getElementById('workspaceScreen').classList.add('hidden');
-            document.getElementById('studentJoinScreen').classList.remove('hidden');
+            await switchRole('student', { showJoinForm: true });
+            // Keep the shared code visible after all role/navigation updates.
             document.getElementById('joinCodeInput').value = requestedJoinCode.trim().toUpperCase();
             nameInput.focus();
           }
@@ -703,7 +698,7 @@
     });
     resetRoleBtn.addEventListener('click', resetRole);
 
-    async function switchRole(role) {
+    async function switchRole(role, options = {}) {
       if (!signedInUser) { showToast('Sign in with Google first.', 'error'); return; }
 
       // The teacher UI is not an authorization boundary, but it should still
@@ -735,9 +730,14 @@
       } else {
         roleBadge.textContent = "Student Mode";
         roleBadge.className = "bg-emerald-800 text-emerald-100 px-3 py-1 rounded-full font-medium shadow-inner";
-        studentJoinScreen.classList.add('hidden');
-        studentHistoryScreen.classList.remove('hidden');
-        renderStudentHistory();
+        if (options.showJoinForm) {
+          studentHistoryScreen.classList.add('hidden');
+          studentJoinScreen.classList.remove('hidden');
+        } else {
+          studentJoinScreen.classList.add('hidden');
+          studentHistoryScreen.classList.remove('hidden');
+          renderStudentHistory();
+        }
       }
     }
 
