@@ -132,9 +132,14 @@
         <div><h3 class="text-lg font-bold text-slate-800">My Assignments</h3><p class="text-sm text-slate-500">Select an assignment to monitor work and review submissions.</p></div>
         <div id="teacherAssignmentsList" class="grid grid-cols-1 md:grid-cols-2 gap-3"><p class="text-sm text-slate-400">Loading assignments...</p></div>
       </div>
-      <section id="teacherStudentStatsPanel" class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-4">
-        <div><h3 class="text-lg font-bold text-slate-800">Student Progress Overview</h3><p class="text-sm text-slate-500">Student totals across your assignments. Add a remark for follow-up.</p></div>
-        <div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead class="bg-slate-50 text-slate-600"><tr><th class="p-2">Student</th><th class="p-2">Started</th><th class="p-2">In progress</th><th class="p-2">Submitted</th><th class="p-2">Completed</th><th class="p-2 min-w-56">Remark</th></tr></thead><tbody id="teacherStudentStatsBody"><tr><td colspan="6" class="p-3 text-slate-400">Loading student statistics…</td></tr></tbody></table></div>
+      <section id="teacherStudentStatsSection" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <button id="toggleTeacherStudentStatsBtn" type="button" aria-expanded="false" aria-controls="teacherStudentStatsPanel" class="w-full p-5 flex items-center justify-between gap-3 text-left hover:bg-slate-50 transition">
+          <span><span class="block font-bold text-slate-800">Student Progress Overview</span><span class="block text-sm text-slate-500 mt-1">Show or hide student totals and follow-up remarks.</span></span>
+          <i id="teacherStudentStatsChevron" class="fa-solid fa-chevron-down text-slate-500 transition-transform"></i>
+        </button>
+        <div id="teacherStudentStatsPanel" class="hidden p-6 pt-0 space-y-4">
+          <div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead class="bg-slate-50 text-slate-600"><tr><th class="p-2">Student</th><th class="p-2">Started</th><th class="p-2">In progress</th><th class="p-2">Submitted</th><th class="p-2">Completed</th><th class="p-2 min-w-56">Remark</th></tr></thead><tbody id="teacherStudentStatsBody"><tr><td colspan="6" class="p-3 text-slate-400">Loading student statistics…</td></tr></tbody></table></div>
+        </div>
       </section>
       <!-- Active Assignment View -->
       <div id="teacherActiveSection" class="hidden space-y-6">
@@ -569,6 +574,17 @@
     const mainCanvas = document.getElementById('mainCanvas');
     const ctx = mainCanvas.getContext('2d');
     const canvasWrapper = document.getElementById('canvasWrapper');
+
+    document.getElementById('toggleTeacherStudentStatsBtn').addEventListener('click', () => {
+      const panel = document.getElementById('teacherStudentStatsPanel');
+      const button = document.getElementById('toggleTeacherStudentStatsBtn');
+      const chevron = document.getElementById('teacherStudentStatsChevron');
+      const isOpening = panel.classList.contains('hidden');
+      panel.classList.toggle('hidden', !isOpening);
+      button.setAttribute('aria-expanded', String(isOpening));
+      chevron.classList.toggle('rotate-180', isOpening);
+      if (isOpening) loadTeacherStudentStats();
+    });
 
     document.getElementById('selectTeacherBtn').addEventListener('click', () => switchRole('teacher'));
     document.getElementById('selectStudentBtn').addEventListener('click', () => switchRole('student'));
@@ -1010,6 +1026,32 @@
       }
     }
 
+    async function loadAssignmentProgressCounts(assignment) {
+      const assignmentRef = db.collection('assignments').doc(assignment.id);
+      const [assignedSnapshot, joinedSnapshot] = await Promise.all([
+        assignmentRef.collection('assignedStudents').get(),
+        assignmentRef.collection('students').get()
+      ]);
+
+      // Merge assigned and joined records so a student is counted only once.
+      const records = new Map();
+      assignedSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        const key = String(data.studentEmail || data.email || data.studentUid || doc.id).trim().toLowerCase();
+        records.set(key, { ...data, _key: key });
+      });
+      joinedSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        const key = String(data.email || data.studentEmail || data.uid || doc.id).trim().toLowerCase();
+        const existing = records.get(key) || {};
+        records.set(key, { ...existing, ...data, _key: key });
+      });
+
+      const assigned = Math.max(Number(assignment.assignedStudentCount || 0), records.size);
+      const completed = Array.from(records.values()).filter(record => String(record.status || '').toLowerCase() === 'completed').length;
+      return { assigned, completed: Math.min(completed, assigned), remaining: Math.max(0, assigned - completed) };
+    }
+
     function renderTeacherAssignments() {
       if (!signedInUser || !db || accountRole !== 'teacher') return;
       if (teacherAssignmentsUnsubscribe) teacherAssignmentsUnsubscribe();
@@ -1038,8 +1080,14 @@
             title.textContent = item.title || 'Untitled assignment';
             const meta = document.createElement('div');
             meta.className = 'text-xs text-slate-500 mt-1';
-            meta.textContent = 'Code: ' + (item.sessionCode || '—') + ' • ' + (item.assignedStudentCount || 0) + ' assigned';
-            card.append(title, meta);
+            meta.textContent = 'Code: ' + (item.sessionCode || '—');
+            const progress = document.createElement('div');
+            progress.className = 'flex flex-wrap gap-2 mt-3 text-xs font-semibold';
+            progress.innerHTML = '<span class="rounded-full bg-indigo-50 text-indigo-700 px-2.5 py-1">Assigned: ' + Number(item.assignedStudentCount || 0) + '</span><span class="rounded-full bg-emerald-50 text-emerald-700 px-2.5 py-1">Completed: 0</span><span class="rounded-full bg-amber-50 text-amber-800 px-2.5 py-1">Remaining: ' + Number(item.assignedStudentCount || 0) + '</span>';
+            card.append(title, meta, progress);
+            loadAssignmentProgressCounts(item).then(counts => {
+              progress.innerHTML = '<span class="rounded-full bg-indigo-50 text-indigo-700 px-2.5 py-1">Assigned: ' + counts.assigned + '</span><span class="rounded-full bg-emerald-50 text-emerald-700 px-2.5 py-1">Completed: ' + counts.completed + '</span><span class="rounded-full ' + (counts.remaining ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-600') + ' px-2.5 py-1">Remaining: ' + counts.remaining + '</span>';
+            }).catch(err => console.warn('Could not load assignment progress for ' + item.id, err));
             card.addEventListener('click', () => {
               currentAssignmentId = item.id; currentAssignmentData = item; currentSessionCode = item.sessionCode || '';
               loadTeacherAssignmentView(item.id);
