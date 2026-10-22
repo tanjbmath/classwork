@@ -71,11 +71,15 @@
       border-radius: 0.5rem;
     }
     #workspaceScreen:fullscreen #canvasWrapper {
+      /* Keep the writing surface at its original 4:3 ratio in fullscreen.
+         Stretching the wrapper changes the canvas coordinate scale vertically. */
+      width: min(100%, calc((100vh - 205px) * 4 / 3));
       max-width: none;
-      width: 100%;
-      height: calc(100vh - 205px);
-      min-height: 180px;
-      aspect-ratio: auto;
+      height: auto;
+      aspect-ratio: 4 / 3;
+      min-height: 0;
+      flex: 0 0 auto;
+      align-self: center;
     }
     #workspaceScreen:fullscreen #canvasPanel { padding: 0.35rem; }
     #workspaceScreen:fullscreen #questionImageDisplay {
@@ -118,7 +122,11 @@
       #workspaceScreen #canvasToolbarHeader { gap: 0.35rem; }
       main:has(#workspaceScreen:not(.hidden)) { padding: 0.35rem; }
       body:has(#workspaceScreen:not(.hidden)) header { display: none; }
-      #workspaceScreen:fullscreen #canvasWrapper { height: calc(100vh - 165px); }
+      #workspaceScreen:fullscreen #canvasWrapper {
+        width: min(100%, calc((100vh - 165px) * 4 / 3));
+        height: auto;
+        aspect-ratio: 4 / 3;
+      }
     }
   </style>
 </head>
