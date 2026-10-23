@@ -1,0 +1,110 @@
+
+    body {
+      font-family: 'Inter', sans-serif;
+      overscroll-behavior-y: none;
+    }
+    .canvas-container {
+      position: relative;
+      touch-action: none;
+      overscroll-behavior: contain;
+    }
+    #mainCanvas {
+      position: absolute;
+      left: 0;
+      top: 0;
+      transform-origin: 0 0;
+      touch-action: none;
+      max-width: none;
+    }
+
+    /* Compact, single-line controls and a larger writing area on phones. */
+    #drawingToolbar {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 0.25rem;
+      width: 100%;
+      min-width: 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+      white-space: nowrap;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+      padding-bottom: 2px;
+    }
+    #drawingToolbar > * { flex-shrink: 0; }
+    #drawingToolbar button { font-size: 11px; padding: 0.3rem 0.45rem; }
+    #drawingToolbar .toolbar-group { gap: 0.2rem; padding: 0.2rem; }
+    #drawingToolbar label { font-size: 10px; }
+    #drawingToolbar input[type="color"] { width: 22px; height: 22px; }
+    #drawingToolbar input[type="range"] { width: 48px; }
+    #drawingToolbar #inputModeText { font-size: 10px; }
+    #workspaceScreen:fullscreen {
+      background: #f1f5f9;
+      padding: 0.35rem;
+      overflow: auto;
+    }
+    #workspaceScreen:fullscreen > .workspace-controls {
+      padding: 0.35rem;
+      gap: 0.35rem;
+      border-radius: 0.5rem;
+    }
+    #workspaceScreen:fullscreen #canvasWrapper {
+      /* Keep the writing surface at its original 4:3 ratio in fullscreen.
+         Stretching the wrapper changes the canvas coordinate scale vertically. */
+      width: min(100%, calc((100vh - 205px) * 4 / 3));
+      max-width: none;
+      height: auto;
+      aspect-ratio: 4 / 3;
+      min-height: 0;
+      flex: 0 0 auto;
+      align-self: center;
+    }
+    #workspaceScreen:fullscreen #canvasPanel { padding: 0.35rem; }
+    #workspaceScreen:fullscreen #questionImageDisplay {
+      max-height: 15vh;
+    }
+    @media (max-width: 640px) {
+      #workspaceScreen { gap: 0.35rem; }
+      #workspaceScreen > .workspace-controls {
+        padding: 0.4rem;
+        gap: 0.35rem;
+        border-radius: 0.5rem;
+      }
+      #workspaceScreen #workspaceTitle { font-size: 0.8rem; line-height: 1.1rem; }
+      #workspaceScreen #workspaceSubtext { font-size: 9px; }
+      #workspaceScreen #exitWorkspaceBtn,
+      #workspaceScreen #submitAssignmentBtn,
+      #workspaceScreen #teacherReviewActions button {
+        font-size: 10px;
+        padding: 0.3rem 0.4rem;
+      }
+      #workspaceScreen .slide-navigation { gap: 0.2rem; padding: 0.2rem; }
+      #workspaceScreen .slide-navigation button {
+        font-size: 10px;
+        padding: 0.25rem 0.35rem;
+      }
+      #workspaceScreen #slideIndicator { font-size: 10px; padding: 0.2rem; white-space: nowrap; }
+      #drawingToolbar { gap: 0.2rem; }
+      #drawingToolbar button { font-size: 10px; padding: 0.28rem 0.38rem; }
+      #drawingToolbar .toolbar-group { padding: 0.15rem; }
+      #drawingToolbar input[type="range"] { width: 38px; }
+      #workspaceScreen #canvasPanel { padding: 0.35rem; border-radius: 0.5rem; }
+      #workspaceScreen #canvasWrapper {
+        width: 100%;
+        max-width: none;
+        aspect-ratio: 4 / 3;
+      }
+      #workspaceScreen #questionImageDisplay { max-height: 18vh; }
+      #workspaceScreen #slidePromptContainer { padding: 0.4rem; margin-bottom: 0.35rem; font-size: 11px; }
+      #workspaceScreen #questionImageContainer { margin-bottom: 0.35rem; }
+      #workspaceScreen #canvasToolbarHeader { gap: 0.35rem; }
+      main:has(#workspaceScreen:not(.hidden)) { padding: 0.35rem; }
+      body:has(#workspaceScreen:not(.hidden)) header { display: none; }
+      #workspaceScreen:fullscreen #canvasWrapper {
+        width: min(100%, calc((100vh - 165px) * 4 / 3));
+        height: auto;
+        aspect-ratio: 4 / 3;
+      }
+    }
+  
