@@ -18,6 +18,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-functions-compat.js"></script>
 
   <link rel="stylesheet" href="./style.css">
 </head>
@@ -185,6 +186,15 @@
         </div>
         <button id="historyJoinAssignmentBtn" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-lg font-semibold"><i class="fa-solid fa-plus mr-2"></i>Join assignment</button>
       </div>
+      <section id="gamificationPanel" class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4">
+        <div class="flex items-center justify-between gap-3 flex-wrap">
+          <div><p class="text-xs font-bold uppercase tracking-wide text-indigo-600">Your progress</p><h3 class="text-xl font-bold text-slate-800">Level <span id="gamificationLevel">1</span> · <span id="gamificationTitle">Starter</span></h3></div>
+          <div class="rounded-full bg-indigo-50 text-indigo-700 px-3 py-1.5 font-bold text-sm"><i class="fa-solid fa-bolt mr-1"></i><span id="gamificationXp">0</span> XP</div>
+        </div>
+        <div class="h-2.5 bg-slate-100 rounded-full overflow-hidden"><div id="gamificationProgressBar" class="h-full bg-indigo-600 rounded-full transition-all" style="width:0%"></div></div>
+        <p id="gamificationProgressText" class="text-xs text-slate-500">0 / 100 XP to Level 2</p>
+        <p id="gamificationStatus" class="text-xs text-slate-400">Your learning progress will appear here.</p>
+      </section>
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="bg-white p-4 rounded-xl border border-slate-200"><div class="text-sm text-slate-500">Assignment started</div><div id="historyStartedCount" class="text-2xl font-bold mt-1">0</div></div>
         <div class="bg-white p-4 rounded-xl border border-slate-200"><div class="text-sm text-slate-500">In progress</div><div id="historyProgressCount" class="text-2xl font-bold mt-1">0</div></div>

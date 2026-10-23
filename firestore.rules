@@ -47,6 +47,12 @@ service cloud.firestore {
 
       allow delete: if false;
 
+      match /gamification/{document=**} {
+        allow read: if isOwner(uid);
+        // XP profiles and reward events are written only by trusted Cloud Functions.
+        allow write: if false;
+      }
+
       match /submissions/{assignmentId} {
         allow read: if isOwner(uid);
         allow create: if isOwner(uid)

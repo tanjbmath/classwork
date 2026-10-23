@@ -38,6 +38,7 @@
       auth.onAuthStateChanged(async user => {
         signedInUser = user || null;
         isFirebaseReady = true;
+        if (user) setTimeout(() => loadGamificationProfile(), 0);
         const signedOut = document.getElementById('signedOutPanel');
         const signedIn = document.getElementById('signedInPanel');
         const studentBtn = document.getElementById('selectStudentBtn');
@@ -941,6 +942,44 @@
     if (initialJoinCode) document.getElementById('joinCodeInput').value = initialJoinCode.trim().toUpperCase();
 
     // ==========================================
+    // GAMIFICATION PHASE 1: XP AND LEVELS
+    // ==========================================
+    const GAMIFICATION_XP_PER_LEVEL = 100;
+    const GAMIFICATION_TITLES = ['Starter', 'Learner', 'Explorer', 'Achiever', 'Scholar', 'Expert', 'Champion'];
+
+    function renderGamificationProfile(profile = {}) {
+      const xp = Math.max(0, Number(profile.totalXp || 0));
+      const level = Math.floor(xp / GAMIFICATION_XP_PER_LEVEL) + 1;
+      const xpInLevel = xp % GAMIFICATION_XP_PER_LEVEL;
+      const title = GAMIFICATION_TITLES[Math.min(level - 1, GAMIFICATION_TITLES.length - 1)];
+      const levelEl = document.getElementById('gamificationLevel');
+      if (!levelEl) return;
+      levelEl.textContent = level;
+      document.getElementById('gamificationTitle').textContent = title;
+      document.getElementById('gamificationXp').textContent = xp;
+      document.getElementById('gamificationProgressBar').style.width = xpInLevel + '%';
+      document.getElementById('gamificationProgressText').textContent =
+        xpInLevel + ' / ' + GAMIFICATION_XP_PER_LEVEL + ' XP to Level ' + (level + 1);
+      document.getElementById('gamificationStatus').textContent = profile.updatedAt
+        ? 'Progress synced to your account.'
+        : 'Earn XP by submitting assignments and getting work approved.';
+    }
+
+    async function loadGamificationProfile() {
+      if (!signedInUser || !db) return;
+      const profileRef = db.collection('users').doc(signedInUser.uid)
+        .collection('gamification').doc('profile');
+      try {
+        const snap = await profileRef.get();
+        renderGamificationProfile(snap.exists ? snap.data() : { totalXp: 0 });
+      } catch (err) {
+        console.warn('Gamification profile could not be loaded:', err);
+        const status = document.getElementById('gamificationStatus');
+        if (status) status.textContent = 'XP tracking will be available after gamification is enabled for this account.';
+      }
+    }
+
+    // ==========================================
     // STUDENT JOIN & MATCHING
     // ==========================================
     document.getElementById('studentJoinForm').addEventListener('submit', async (e) => {
@@ -1170,6 +1209,14 @@
         }
         currentSubmissionStatus = 'submitted';
         updateSubmitAssignmentButton();
+        // The callable function verifies the saved submission and awards XP once on the server.
+        try {
+          const award = await firebase.functions().httpsCallable('awardSubmissionXp')({ assignmentId: currentAssignmentId });
+          await loadGamificationProfile();
+          if (award.data?.awarded) showToast('You earned 20 XP for your first submission!', 'success');
+        } catch (xpErr) {
+          console.warn('XP award is not available yet:', xpErr);
+        }
         renderCombinedStudentHistory();
         showToast('Assignment submitted to your teacher for review.', 'success');
       } catch (err) {
