@@ -38,6 +38,7 @@
       auth.onAuthStateChanged(async user => {
         signedInUser = user || null;
         isFirebaseReady = true;
+        if (user) setTimeout(() => loadGamificationProfile(), 0);
         const signedOut = document.getElementById('signedOutPanel');
         const signedIn = document.getElementById('signedInPanel');
         const studentBtn = document.getElementById('selectStudentBtn');
