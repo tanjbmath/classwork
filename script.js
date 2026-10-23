@@ -941,6 +941,44 @@
     if (initialJoinCode) document.getElementById('joinCodeInput').value = initialJoinCode.trim().toUpperCase();
 
     // ==========================================
+    // GAMIFICATION PHASE 1: XP AND LEVELS
+    // ==========================================
+    const GAMIFICATION_XP_PER_LEVEL = 100;
+    const GAMIFICATION_TITLES = ['Starter', 'Learner', 'Explorer', 'Achiever', 'Scholar', 'Expert', 'Champion'];
+
+    function renderGamificationProfile(profile = {}) {
+      const xp = Math.max(0, Number(profile.totalXp || 0));
+      const level = Math.floor(xp / GAMIFICATION_XP_PER_LEVEL) + 1;
+      const xpInLevel = xp % GAMIFICATION_XP_PER_LEVEL;
+      const title = GAMIFICATION_TITLES[Math.min(level - 1, GAMIFICATION_TITLES.length - 1)];
+      const levelEl = document.getElementById('gamificationLevel');
+      if (!levelEl) return;
+      levelEl.textContent = level;
+      document.getElementById('gamificationTitle').textContent = title;
+      document.getElementById('gamificationXp').textContent = xp;
+      document.getElementById('gamificationProgressBar').style.width = xpInLevel + '%';
+      document.getElementById('gamificationProgressText').textContent =
+        xpInLevel + ' / ' + GAMIFICATION_XP_PER_LEVEL + ' XP to Level ' + (level + 1);
+      document.getElementById('gamificationStatus').textContent = profile.updatedAt
+        ? 'Progress synced to your account.'
+        : 'Earn XP by submitting assignments and getting work approved.';
+    }
+
+    async function loadGamificationProfile() {
+      if (!signedInUser || !db) return;
+      const profileRef = db.collection('users').doc(signedInUser.uid)
+        .collection('gamification').doc('profile');
+      try {
+        const snap = await profileRef.get();
+        renderGamificationProfile(snap.exists ? snap.data() : { totalXp: 0 });
+      } catch (err) {
+        console.warn('Gamification profile could not be loaded:', err);
+        const status = document.getElementById('gamificationStatus');
+        if (status) status.textContent = 'XP tracking will be available after gamification is enabled for this account.';
+      }
+    }
+
+    // ==========================================
     // STUDENT JOIN & MATCHING
     // ==========================================
     document.getElementById('studentJoinForm').addEventListener('submit', async (e) => {
