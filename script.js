@@ -1209,6 +1209,14 @@
         }
         currentSubmissionStatus = 'submitted';
         updateSubmitAssignmentButton();
+        // The callable function verifies the saved submission and awards XP once on the server.
+        try {
+          const award = await firebase.functions().httpsCallable('awardSubmissionXp')({ assignmentId: currentAssignmentId });
+          await loadGamificationProfile();
+          if (award.data?.awarded) showToast('You earned 20 XP for your first submission!', 'success');
+        } catch (xpErr) {
+          console.warn('XP award is not available yet:', xpErr);
+        }
         renderCombinedStudentHistory();
         showToast('Assignment submitted to your teacher for review.', 'success');
       } catch (err) {
