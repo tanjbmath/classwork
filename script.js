@@ -865,11 +865,14 @@
         card.className = "bg-slate-50 border border-slate-200 hover:border-indigo-400 p-4 rounded-xl shadow-sm transition flex flex-col gap-3";
         const displayName = student.name || student.studentEmail || 'Assigned student';
         const labels = { 'assignment-started': 'Assignment Started', 'in-progress': 'In Progress', 'submitted': 'Submitted', 'completed': 'Completed' };
+        const statusBadgeClasses = student.status === 'completed'
+          ? 'bg-emerald-50 text-emerald-700'
+          : 'bg-indigo-50 text-indigo-700';
         card.innerHTML = `
           <div class="flex justify-between items-start gap-2"><div class="min-w-0">
             <h5 class="font-bold text-slate-800 break-words">${escapeHtml(displayName)}</h5>
             <p class="text-xs text-slate-500 break-all">${escapeHtml(student.studentEmail || student.email || '')}</p>
-            <span class="inline-block mt-1 text-xs rounded-full px-2 py-1 bg-indigo-50 text-indigo-700">${labels[student.status] || 'In Progress'}</span>
+            <span class="inline-block mt-1 text-xs rounded-full px-2 py-1 ${statusBadgeClasses}">${labels[student.status] || 'In Progress'}</span>
           </div><span class="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded font-semibold whitespace-nowrap">${currentAssignmentData?.slides?.length || 1} Slides</span></div>
           <div class="h-32 bg-white border border-slate-200 rounded flex items-center justify-center overflow-hidden relative">
             ${student.isJoined ? `<img id="thumb-${student.id}" class="w-full h-full object-contain" src="" alt="Live Preview">` : '<span class="text-xs text-slate-400">Not joined yet</span>'}
