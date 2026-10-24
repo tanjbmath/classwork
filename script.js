@@ -758,8 +758,16 @@
       });
 
       const assigned = Math.max(Number(assignment.assignedStudentCount || 0), records.size);
-      const completed = Array.from(records.values()).filter(record => String(record.status || '').toLowerCase() === 'completed').length;
-      return { assigned, completed: Math.min(completed, assigned), remaining: Math.max(0, assigned - completed) };
+      const counts = { assignmentStarted: 0, inProgress: 0, submitted: 0, completed: 0 };
+      records.forEach(record => {
+        switch (String(record.status || 'assignment-started').trim().toLowerCase()) {
+          case 'in-progress': counts.inProgress++; break;
+          case 'submitted': counts.submitted++; break;
+          case 'completed': counts.completed++; break;
+          default: counts.assignmentStarted++; break;
+        }
+      });
+      return { assigned, ...counts };
     }
 
     function renderTeacherAssignments() {
@@ -784,26 +792,29 @@
         docs.forEach(item => {
             const card = document.createElement('button');
             card.type = 'button';
-            card.className = 'text-left p-4 border border-slate-200 rounded-xl hover:border-indigo-400 hover:bg-indigo-50 transition';
+            card.className = 'text-left min-w-[920px] p-3 border border-slate-200 rounded-xl hover:border-indigo-400 hover:bg-indigo-50 transition flex items-center gap-4';
             const title = document.createElement('div');
-            title.className = 'font-semibold text-slate-800';
+            title.className = 'font-semibold text-slate-800 w-52 shrink-0 truncate';
             title.textContent = item.title || 'Untitled assignment';
             const meta = document.createElement('div');
-            meta.className = 'text-xs text-slate-500 mt-1';
+            meta.className = 'text-xs text-slate-500 w-28 shrink-0';
             meta.textContent = 'Code: ' + (item.sessionCode || '—');
             const progress = document.createElement('div');
-            progress.className = 'flex flex-wrap gap-2 mt-3 text-xs font-semibold';
-            progress.innerHTML = '<span class="rounded-full bg-indigo-50 text-indigo-700 px-2.5 py-1">Assigned: ' + Number(item.assignedStudentCount || 0) + '</span><span class="rounded-full bg-emerald-50 text-emerald-700 px-2.5 py-1">Completed: 0</span><span class="rounded-full bg-amber-50 text-amber-800 px-2.5 py-1">Remaining: ' + Number(item.assignedStudentCount || 0) + '</span>';
+            progress.className = 'flex items-center gap-2 text-xs font-semibold whitespace-nowrap';
+            const renderProgress = counts => {
+              progress.innerHTML = '<span class="rounded-full bg-indigo-50 text-indigo-700 px-2.5 py-1">Assigned: ' + counts.assigned + '</span><span class="rounded-full bg-slate-100 text-slate-700 px-2.5 py-1">Started: ' + counts.assignmentStarted + '</span><span class="rounded-full bg-sky-50 text-sky-700 px-2.5 py-1">In progress: ' + counts.inProgress + '</span><span class="rounded-full bg-amber-50 text-amber-800 px-2.5 py-1">Submitted: ' + counts.submitted + '</span><span class="rounded-full bg-emerald-50 text-emerald-700 px-2.5 py-1">Completed: ' + counts.completed + '</span>';
+            };
+            renderProgress({ assigned: Number(item.assignedStudentCount || 0), assignmentStarted: 0, inProgress: 0, submitted: 0, completed: 0 });
             card.append(title, meta, progress);
             loadAssignmentProgressCounts(item).then(counts => {
-              progress.innerHTML = '<span class="rounded-full bg-indigo-50 text-indigo-700 px-2.5 py-1">Assigned: ' + counts.assigned + '</span><span class="rounded-full bg-emerald-50 text-emerald-700 px-2.5 py-1">Completed: ' + counts.completed + '</span><span class="rounded-full ' + (counts.remaining ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-600') + ' px-2.5 py-1">Remaining: ' + counts.remaining + '</span>';
+              renderProgress(counts);
             }).catch(err => console.warn('Could not load assignment progress for ' + item.id, err));
             card.addEventListener('click', () => {
               currentAssignmentId = item.id; currentAssignmentData = item; currentSessionCode = item.sessionCode || '';
               loadTeacherAssignmentView(item.id);
             });
             const wrap = document.createElement('div');
-            wrap.className = 'flex gap-2 items-stretch';
+            wrap.className = 'flex gap-2 items-stretch min-w-max';
             card.classList.add('flex-1');
             const del = document.createElement('button');
             del.type = 'button';
